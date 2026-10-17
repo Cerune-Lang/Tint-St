@@ -112,3 +112,62 @@ export function createWasmBackend(
       unsupported("renameSource"),
   };
 }
+
+/**
+ * WASM モジュールの読み込みを遅延させたバックエンドです。
+ *
+ * ブラウザでは WASM の初期化が非同期のため、最初の呼び出し時に
+ * `load()` を一度だけ実行します。初期化に失敗した場合は、各メソッドが
+ * その例外をそのまま送出します。
+ */
+export function createDeferredWasmBackend(
+  load: () => Promise<WasmModule>,
+): TintBackend {
+  let pending: Promise<TintBackend> | null = null;
+
+  const resolve = () => {
+    if (!pending) {
+      pending = load().then(createWasmBackend);
+    }
+
+    return pending;
+  };
+
+  return {
+    capabilities: async () =>
+      (await resolve()).capabilities(),
+
+    check: async (source, sourcePath) =>
+      (await resolve()).check(source, sourcePath),
+
+    observe: async (args) =>
+      (await resolve()).observe(args),
+
+    execute: async (args) =>
+      (await resolve()).execute(args),
+
+    compare: async (args) =>
+      (await resolve()).compare(args),
+
+    loadModules: async (source, sourcePath) =>
+      (await resolve()).loadModules(source, sourcePath),
+
+    saveSnapshot: async (input) =>
+      (await resolve()).saveSnapshot(input),
+
+    listSnapshots: async () =>
+      (await resolve()).listSnapshots(),
+
+    readSnapshot: async (id) =>
+      (await resolve()).readSnapshot(id),
+
+    deleteSnapshot: async (id) =>
+      (await resolve()).deleteSnapshot(id),
+
+    diff: async (args) =>
+      (await resolve()).diff(args),
+
+    renameSource: async (path, newName) =>
+      (await resolve()).renameSource(path, newName),
+  };
+}

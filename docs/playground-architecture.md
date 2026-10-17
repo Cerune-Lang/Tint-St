@@ -259,7 +259,7 @@ Tauri 版は全フィールドが `true` のため、現行 UI は変化しま�
 | 2 | 方式 B: ブラウザ用 `TintHost` と Web ビルド手順を追加 | 完了 |
 | 3 | 方式 C: Cerune の lib API 状況を調査し、WASM ラッパを試作 | 完了 |
 | 4 | 方式 C: `createWasmBackend()` と機能制限の検証 | 完了 |
-| 5 | 3 バックエンドの統合テストとドキュメント整備 | 未着手 |
+| 5 | 3 バックエンドの統合テストとドキュメント整備 | 一部完了 |
 
 各フェーズは独立して段階的に進められるよう設計しています。フェーズ 1
 以降の要否・優先度は別途判断します。
@@ -289,9 +289,17 @@ Tauri 版は全フィールドが `true` のため、現行 UI は変化しま�
   - フェーズ 4: 方式 C のアダプタ `createWasmBackend()` を実装
     （`src/backend-wasm.ts`）。WASM モジュールを注入して使う設計にし、
     機能制限を偽モジュールで検証。
+  - フェーズ 5（一部）: 実行環境に `wasm` を追加
+    （`src/environment.ts` の `detectEnvironment` / `isTauriRuntime`）。
+    WASM 版の遅延初期化（`createDeferredWasmBackend`）とローダ
+    （`src/wasm-loader.ts`）を実装し、`src/main.ts` で選択する。
+    初期化に失敗した場合は未対応機能を有効に見せないよう全機能を
+    無効化し、エラーを表示する。
 - 未実装:
-  - 方式 C の実配布（WASM をフロントエンドのビルドに組み込む。成果物の
-    同梱方法は未決定）。
+  - 方式 C の実配布: WASM を Vite ビルドに組み込み、GitHub Actions で
+    Cerune を固定チェックアウトして生成し、GitHub Pages へ配布する
+    （CI ワークフローと Pages 用 base path は未作成）。
+  - 方式 C の `modules`（import 解決）対応。
 
 ### 自動起動方式の補足
 
@@ -321,7 +329,15 @@ Tauri 版は全フィールドが `true` のため、現行 UI は変化しま�
    http://localhost:4173/?server=<base_url>&token=<token>
    ```
 
-`server` と `token` が両方あるときだけブラウザ版として動作し、無ければ
-Tauri 版として起動します。ブラウザ版ではファイル入出力にブラウザ API を
-使い、import 解決は論理ファイル名に基づくため、ネイティブ版ほど完全な
-パス解決はできません（既知の制限）。
+`server` と `token` が両方あるときだけ HTTP 版として動作します。どちらかが
+欠けている場合は、Tauri ランタイム上なら Tauri 版、ブラウザ上なら WASM 版
+として起動します。ブラウザ版ではファイル入出力にブラウザ API を使い、import
+解決は論理ファイル名に基づくため、ネイティブ版ほど完全なパス解決はできません
+（既知の制限）。
+
+### ブラウザ WASM 版（開発中）
+
+`npm run build:wasm` で `experiments/wasm/pkg/` を生成し、その中身を
+`public/wasm/` へ配置してから `npm run build` すると、クエリ無しでブラウザ
+から WASM 版が起動します（配置は現状手動。CI では自動化予定）。提供できる
+機能は `capabilities()` に従って自動的に制限されます。
