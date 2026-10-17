@@ -1,6 +1,6 @@
-mod cerune_cli;
+pub mod cerune_cli;
 mod history;
-mod interface;
+pub mod interface;
 
 use interface::{
     CheckRequest, CompareKind, CompareRequest, Diagnostic, ExecuteRequest, ExecutionPath,
