@@ -355,6 +355,263 @@ function compareKindForOutput(
   }
 }
 
+interface OriginAnnotation {
+  line: number;
+  node: string;
+  start: number;
+  end: number;
+}
+
+interface OriginLine {
+  span: HTMLSpanElement;
+  start: number;
+  end: number;
+}
+
+const originPattern =
+  /cerune-origin:\s*#(\S+)\s+bytes\s+(\d+)\.\.(\d+)/;
+
+let currentOriginLines: OriginLine[] = [];
+
+function parseOriginAnnotations(
+  text: string,
+): OriginAnnotation[] {
+  const annotations: OriginAnnotation[] = [];
+
+  const lines = text.split("\n");
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = originPattern.exec(
+      lines[index],
+    );
+
+    if (!match) {
+      continue;
+    }
+
+    annotations.push({
+      line: index,
+      node: match[1],
+      start: Number(match[2]),
+      end: Number(match[3]),
+    });
+  }
+
+  return annotations;
+}
+
+function buildByteToChar(text: string): Uint32Array {
+  const bytes = new TextEncoder().encode(text);
+
+  const map = new Uint32Array(bytes.length + 1);
+
+  let byte = 0;
+
+  let char = 0;
+
+  while (char < text.length) {
+    const codePoint = text.codePointAt(char) ?? 0;
+
+    const units = codePoint > 0xffff ? 2 : 1;
+
+    const size =
+      codePoint < 0x80
+        ? 1
+        : codePoint < 0x800
+          ? 2
+          : codePoint < 0x10000
+            ? 3
+            : 4;
+
+    for (let offset = 0; offset < size; offset += 1) {
+      map[byte + offset] = char;
+    }
+
+    byte += size;
+
+    char += units;
+  }
+
+  map[byte] = text.length;
+
+  return map;
+}
+
+function isInstructionLine(line: string): boolean {
+  const trimmed = line.trim();
+
+  if (!trimmed) {
+    return false;
+  }
+
+  if (trimmed === "{" || trimmed === "}") {
+    return false;
+  }
+
+  if (/^[#;.]/.test(trimmed)) {
+    return false;
+  }
+
+  if (trimmed.endsWith(":")) {
+    return false;
+  }
+
+  return true;
+}
+
+function renderOutput(
+  kind: OutputKind,
+  text: string,
+) {
+  const container = outputElement();
+
+  container.textContent = "";
+
+  currentOriginLines = [];
+
+  const navigable =
+    kind === "llvm" || kind === "directAsm";
+
+  if (!navigable || !text.includes("cerune-origin:")) {
+    container.textContent = text;
+    return;
+  }
+
+  const annotations =
+    parseOriginAnnotations(text);
+
+  if (annotations.length === 0) {
+    container.textContent = text;
+    return;
+  }
+
+  const byteToChar = buildByteToChar(
+    sourceText(),
+  );
+
+  const byLine = new Map(
+    annotations.map((annotation) => [
+      annotation.line,
+      annotation,
+    ]),
+  );
+
+  const lines = text.split("\n");
+
+  const fragment =
+    document.createDocumentFragment();
+
+  let last: OriginAnnotation | null = null;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+
+    const span = document.createElement("span");
+
+    span.textContent = line;
+
+    span.className = "output-line";
+
+    const annotation = byLine.get(index);
+
+    if (annotation) {
+      last = annotation;
+    }
+
+    if (last && isInstructionLine(line)) {
+      const start = byteToChar[
+        Math.min(last.start, byteToChar.length - 1)
+      ];
+
+      const end = byteToChar[
+        Math.min(last.end, byteToChar.length - 1)
+      ];
+
+      span.classList.add("origin");
+
+      span.dataset.from = String(start);
+
+      span.dataset.to = String(end);
+
+      span.title =
+        `node ${last.node} · bytes ${last.start}..${last.end}`;
+
+      currentOriginLines.push({
+        span,
+        start,
+        end,
+      });
+    }
+
+    fragment.append(span);
+
+    fragment.append(document.createTextNode("\n"));
+  }
+
+  container.append(fragment);
+
+  updateOriginHighlight();
+}
+
+function updateOriginHighlight() {
+  if (
+    currentOriginLines.length === 0 ||
+    !sourceView
+  ) {
+    return;
+  }
+
+  const head =
+    sourceView.state.selection.main.head;
+
+  for (const entry of currentOriginLines) {
+    if (!entry.span.isConnected) {
+      continue;
+    }
+
+    entry.span.classList.toggle(
+      "highlight",
+      head >= entry.start && head <= entry.end,
+    );
+  }
+}
+
+function jumpToOrigin(element: HTMLElement) {
+  if (!sourceView) {
+    return;
+  }
+
+  const from = Number(element.dataset.from);
+
+  const to = Number(element.dataset.to);
+
+  if (!Number.isFinite(from)) {
+    return;
+  }
+
+  const doc = sourceView.state.doc;
+
+  const anchor = Math.min(
+    Math.max(from, 0),
+    doc.length,
+  );
+
+  const head = Math.min(
+    Math.max(
+      Number.isFinite(to) ? to : anchor,
+      anchor,
+    ),
+    doc.length,
+  );
+
+  sourceView.dispatch({
+    selection: { anchor, head },
+    scrollIntoView: true,
+  });
+
+  sourceView.focus();
+}
+
 function showOutput(
   kind: OutputKind,
 ) {
@@ -374,9 +631,11 @@ function showOutput(
   const output = outputs[kind];
 
   if (output) {
-    outputElement().textContent = output;
+    renderOutput(kind, output);
     return;
   }
+
+  currentOriginLines = [];
 
   outputElement().textContent =
     executionPathForOutput(kind)
@@ -1549,6 +1808,8 @@ window.addEventListener(
               updateCursorPosition(
                 update.state,
               );
+
+              updateOriginHighlight();
             }
           },
         ),
@@ -1666,6 +1927,21 @@ window.addEventListener(
           applyWrap();
         },
       );
+
+    outputElement().addEventListener(
+      "click",
+      (event) => {
+        const target = (
+          event.target as HTMLElement
+        )?.closest(
+          ".output-line.origin",
+        ) as HTMLElement | null;
+
+        if (target) {
+          jumpToOrigin(target);
+        }
+      },
+    );
 
     document
       .querySelector("#snapshot-select")

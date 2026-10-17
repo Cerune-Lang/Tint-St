@@ -450,6 +450,23 @@ button {
   tab-size: 2;
 }
 
+.output-line.origin {
+  border-radius: 3px;
+
+  cursor: pointer;
+
+  box-shadow: inset 2px 0 0 #bcdbed;
+}
+
+.output-line.origin:hover {
+  background: #e8f4fc;
+}
+
+.output-line.origin.highlight {
+  background: #d7ecfa;
+  box-shadow: inset 2px 0 0 #78c5ef;
+}
+
 /* Status bar */
 
 .statusbar {
