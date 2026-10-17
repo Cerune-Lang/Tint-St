@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Shared Cerune observation core used by the Tint desktop app and Playground server"
 authors = ["you"]
 edition = "2021"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 object = "0.40"

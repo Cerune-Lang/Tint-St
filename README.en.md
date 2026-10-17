@@ -428,3 +428,11 @@ Tint* is a window for observing all of them together.
 ## Name
 
 `tint` means a pale color made by adding white to a color.
+
+## License
+
+Like Cerune itself, this project is dual-licensed under either the MIT
+License or the Apache License, Version 2.0, at your option.
+
+- [LICENSE-MIT](LICENSE-MIT)
+- [LICENSE-APACHE](LICENSE-APACHE)

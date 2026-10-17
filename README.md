@@ -554,3 +554,11 @@ Tint* は、それらを横断して観測するための窓です。
 ## 名前
 
 `tint` は、色に白を加えて明るくした淡い色を意味します。
+
+## ライセンス
+
+Cerune 本体と同様に、MIT ライセンスまたは Apache License 2.0 の
+デュアルライセンスです。どちらか一方を選択できます。
+
+- [LICENSE-MIT](LICENSE-MIT)
+- [LICENSE-APACHE](LICENSE-APACHE)
