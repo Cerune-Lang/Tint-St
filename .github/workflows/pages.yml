@@ -1,0 +1,89 @@
+name: Deploy Playground to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# GitHub Pages への配信に必要な権限のみを付与します。
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  # 再現性のためツールチェーンのバージョンを明示的に固定します。
+  RUST_TOOLCHAIN: "1.98.0"
+  WASM_PACK_VERSION: "0.15.0"
+  NODE_VERSION: "20"
+  # Cerune を固定チェックアウトします（tag v0.1.0）。
+  CERUNE_REF: "a93a4d57d20c0c9bc37ab92bcfd9f2543749825c"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Tint
+        uses: actions/checkout@v4
+        with:
+          path: Tint
+
+      # Tint と兄弟になるよう Cerune をチェックアウトします。WASM クレートは
+      # `../../../Cerune` の path 依存のため、この配置が必要です。
+      - name: Checkout Cerune (pinned)
+        uses: actions/checkout@v4
+        with:
+          repository: Cerune-Lang/Cerune
+          ref: ${{ env.CERUNE_REF }}
+          path: Cerune
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack@${{ env.WASM_PACK_VERSION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: Tint/package-lock.json
+
+      - name: Install dependencies
+        working-directory: Tint
+        run: npm ci
+
+      # WASM を生成して public/wasm へ配置し、Pages 用に Vite ビルドします。
+      # カスタムドメインをルート配信しているため base は既定の `/` です。
+      - name: Build Playground
+        working-directory: Tint
+        run: npm run build:pages
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: Tint/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
