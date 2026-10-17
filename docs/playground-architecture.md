@@ -213,7 +213,7 @@ Tauri 版は全フィールドが `true` のため、現行 UI は変化しま�
 | --- | --- | --- |
 | 0 | フロントエンドのバックエンド抽象化 (`TintBackend`/`TintHost`) | 完了 |
 | 1 | 方式 B: 共有 `core` 切り出し・`tint-server`・`createHttpBackend()` | 一部完了 |
-| 1.5 | 方式 B: Tauri からのサーバー自動起動とライフサイクル管理 | 未着手 |
+| 1.5 | 方式 B: Tauri からのサーバー自動起動とライフサイクル管理 | 完了 |
 | 2 | 方式 B: ブラウザ用 `TintHost` と Web ビルド手順を追加 | 未着手 |
 | 3 | 方式 C: Cerune の lib API 状況を調査し、WASM ラッパを試作 | 未着手 |
 | 4 | 方式 C: `createWasmBackend()` と機能制限の検証 | 未着手 |
@@ -232,7 +232,17 @@ Tauri 版は全フィールドが `true` のため、現行 UI は変化しま�
     `Bearer` トークン認証。`tint-core` の 21 単体 + 6 統合テスト、
     `tint-server` の 5 単体 + 6 HTTP 統合テストで検証。
   - `src/backend-http.ts` の `createHttpBackend()`。
+  - フェーズ 1.5: デスクトップアプリ起動時に `tint-server` を
+    **同一プロセス内のバックグラウンドスレッド**で自動起動
+    （`tint_server::spawn()`）。接続情報（`baseUrl`/`token`）は Tauri
+    コマンド `server_info` で取得でき、プロセス終了とともに停止します。
 - 未実装:
-  - Tauri からの `tint-server` 自動起動（プロセス管理）。
   - ブラウザ用 `TintHost` と Web ビルド（フェーズ 2）。
   - 方式 C（ブラウザ WASM）。Cerune のライブラリ API が前提。
+
+### 自動起動方式の補足
+
+デスクトップ版はサーバーを別プロセス（sidecar）ではなく、アプリ本体の
+スレッドで動かします。sidecar の同梱・終了処理が不要で、ライフサイクルは
+アプリのプロセスに一致します。より強い分離が必要になった場合は sidecar へ
+切り替えられます（`tint-server` は単体バイナリとしても動作します）。

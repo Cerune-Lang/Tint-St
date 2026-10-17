@@ -3,7 +3,7 @@ use std::io::Write;
 use tiny_http::Server;
 
 fn main() {
-    let token = std::env::var("TINT_SERVER_TOKEN").unwrap_or_else(|_| generate_token());
+    let token = std::env::var("TINT_SERVER_TOKEN").unwrap_or_else(|_| tint_server::generate_token());
 
     let port = std::env::var("TINT_SERVER_PORT")
         .ok()
@@ -28,15 +28,4 @@ fn main() {
     let _ = std::io::stdout().flush();
 
     tint_server::serve(server, token);
-}
-
-fn generate_token() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-
-    format!("{:016x}{:08x}", nanos as u64, std::process::id())
 }

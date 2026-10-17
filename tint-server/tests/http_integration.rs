@@ -143,3 +143,14 @@ fn diff_is_computed_locally() {
 
     assert!(response.body.contains("\"diff\""));
 }
+
+#[test]
+fn spawn_starts_a_reachable_server() {
+    let base_url = tint_server::spawn(TOKEN.to_owned()).expect("spawn server");
+
+    assert!(base_url.starts_with("http://127.0.0.1:"));
+
+    let response = request(&base_url, "GET", "/health", None, "");
+
+    assert_eq!(response.status, 200);
+}

@@ -475,6 +475,32 @@ pub fn serve(server: Server, token: String) {
     }
 }
 
+/// ローカル開発用の一時トークンを生成します。
+pub fn generate_token() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+
+    format!("{:016x}{:08x}", nanos as u64, std::process::id())
+}
+
+/// `127.0.0.1` の空きポートで待ち受けを開始し、ベース URL を返します。
+///
+/// 待ち受けはバックグラウンドスレッドで行います。プロセスが終了すると
+/// スレッドも一緒に終了します。デスクトップアプリからの自動起動に使います。
+pub fn spawn(token: String) -> Result<String, String> {
+    let server = Server::http("127.0.0.1:0").map_err(|error| error.to_string())?;
+
+    let base_url = format!("http://{}", server.server_addr());
+
+    std::thread::spawn(move || serve(server, token));
+
+    Ok(base_url)
+}
+
 fn respond_one(request: &mut Request, token: &str) -> HttpResponse<std::io::Cursor<Vec<u8>>> {
     let method = request.method().as_str().to_owned();
 
@@ -564,5 +590,14 @@ mod tests {
         assert_eq!(response.status, 200);
 
         assert!(response.body.contains("\"diff\""));
+    }
+
+    #[test]
+    fn generates_hexadecimal_tokens() {
+        let token = super::generate_token();
+
+        assert!(!token.is_empty());
+
+        assert!(token.chars().all(|character| character.is_ascii_hexdigit()));
     }
 }

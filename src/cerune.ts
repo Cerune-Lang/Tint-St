@@ -52,6 +52,11 @@ export type DiffArgs = {
   rightLabel: string;
 };
 
+export type ServerInfo = {
+  baseUrl: string;
+  token: string;
+};
+
 export function emitAll(
   args: EmitArgs,
 ): Promise<ObservationResult> {
@@ -128,4 +133,8 @@ export function renameSource(
     path,
     newName,
   });
+}
+
+export function serverInfo(): Promise<ServerInfo | null> {
+  return invoke<ServerInfo | null>("server_info");
 }

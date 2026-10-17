@@ -1,10 +1,51 @@
 pub use tint_core::{cerune_cli, history, interface};
 
+use std::sync::Mutex;
+
+use serde::Serialize;
+
+use tauri::Manager;
+
 use interface::{
     CheckRequest, CompareKind, CompareRequest, Diagnostic, ExecuteRequest, ExecutionPath,
     ExecutionResult, ModuleFile, ModulesRequest, Observation, ObserveRequest, Target,
     parse_heap_limit,
 };
+
+/// 起動中のローカル HTTP サーバーの接続情報です。
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ServerInfo {
+    base_url: String,
+
+    token: String,
+}
+
+#[derive(Default)]
+struct ServerState(Mutex<Option<ServerInfo>>);
+
+#[tauri::command]
+fn server_info(state: tauri::State<ServerState>) -> Option<ServerInfo> {
+    state.0.lock().ok().and_then(|guard| guard.clone())
+}
+
+fn start_server() -> Option<ServerInfo> {
+    let token = tint_server::generate_token();
+
+    match tint_server::spawn(token.clone()) {
+        Ok(base_url) => {
+            println!("Tint server listening on {base_url}");
+
+            Some(ServerInfo { base_url, token })
+        }
+
+        Err(error) => {
+            eprintln!("failed to start Tint server: {error}");
+
+            None
+        }
+    }
+}
 
 #[tauri::command]
 fn rename_source(path: String, new_name: String) -> Result<String, String> {
@@ -133,6 +174,11 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            app.manage(ServerState(Mutex::new(start_server())));
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             emit_all,
             execute,
@@ -145,6 +191,7 @@ pub fn run() {
             check_source,
             load_modules,
             rename_source,
+            server_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Tint");
