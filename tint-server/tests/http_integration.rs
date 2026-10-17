@@ -26,6 +26,7 @@ fn start_server() -> String {
 struct HttpResult {
     status: u16,
     body: String,
+    raw: String,
 }
 
 fn request(
@@ -33,6 +34,17 @@ fn request(
     method: &str,
     path: &str,
     token: Option<&str>,
+    body: &str,
+) -> HttpResult {
+    request_with_origin(base_url, method, path, token, None, body)
+}
+
+fn request_with_origin(
+    base_url: &str,
+    method: &str,
+    path: &str,
+    token: Option<&str>,
+    origin: Option<&str>,
     body: &str,
 ) -> HttpResult {
     let host = base_url
@@ -45,12 +57,17 @@ fn request(
         .map(|value| format!("Authorization: Bearer {value}\r\n"))
         .unwrap_or_default();
 
+    let origin_header = origin
+        .map(|value| format!("Origin: {value}\r\n"))
+        .unwrap_or_default();
+
     let payload = format!(
         "{method} {path} HTTP/1.1\r\n\
          Host: {host}\r\n\
          Content-Type: application/json\r\n\
          Content-Length: {length}\r\n\
          {authorization}\
+         {origin_header}\
          Connection: close\r\n\
          \r\n\
          {body}",
@@ -77,6 +94,7 @@ fn request(
     HttpResult {
         status,
         body: body.to_owned(),
+        raw,
     }
 }
 
@@ -153,4 +171,67 @@ fn spawn_starts_a_reachable_server() {
     let response = request(&base_url, "GET", "/health", None, "");
 
     assert_eq!(response.status, 200);
+}
+
+#[test]
+fn loopback_origins_receive_cors_headers() {
+    let base_url = start_server();
+
+    let response = request_with_origin(
+        &base_url,
+        "GET",
+        "/capabilities",
+        Some(TOKEN),
+        Some("http://localhost:4173"),
+        "",
+    );
+
+    assert_eq!(response.status, 200);
+
+    assert!(response
+        .raw
+        .to_lowercase()
+        .contains("access-control-allow-origin: http://localhost:4173"));
+}
+
+#[test]
+fn non_loopback_origins_receive_no_cors_headers() {
+    let base_url = start_server();
+
+    let response = request_with_origin(
+        &base_url,
+        "GET",
+        "/capabilities",
+        Some(TOKEN),
+        Some("http://example.com"),
+        "",
+    );
+
+    assert_eq!(response.status, 200);
+
+    assert!(!response
+        .raw
+        .to_lowercase()
+        .contains("access-control-allow-origin"));
+}
+
+#[test]
+fn preflight_requests_are_accepted() {
+    let base_url = start_server();
+
+    let response = request_with_origin(
+        &base_url,
+        "OPTIONS",
+        "/observe",
+        None,
+        Some("http://127.0.0.1:5000"),
+        "",
+    );
+
+    assert_eq!(response.status, 204);
+
+    assert!(response
+        .raw
+        .to_lowercase()
+        .contains("access-control-allow-headers"));
 }

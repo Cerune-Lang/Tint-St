@@ -511,6 +511,12 @@ fn respond_one(request: &mut Request, token: &str) -> HttpResponse<std::io::Curs
         .unwrap_or("")
         .to_owned();
 
+    let origin = request
+        .headers()
+        .iter()
+        .find(|header| header.field.equiv("Origin"))
+        .map(|header| header.value.as_str().to_owned());
+
     let authorization = request
         .headers()
         .iter()
@@ -521,14 +527,69 @@ fn respond_one(request: &mut Request, token: &str) -> HttpResponse<std::io::Curs
 
     let _ = request.as_reader().read_to_string(&mut body);
 
-    let route = handle_request(&method, &path, authorization.as_deref(), &body, token);
+    let route = if method == "OPTIONS" {
+        RouteResponse {
+            status: 204,
+            content_type: "text/plain",
+            body: String::new(),
+        }
+    } else {
+        handle_request(&method, &path, authorization.as_deref(), &body, token)
+    };
 
-    let header = Header::from_bytes(&b"Content-Type"[..], route.content_type.as_bytes())
-        .expect("static content type header");
-
-    HttpResponse::from_string(route.body)
+    let mut response = HttpResponse::from_string(route.body)
         .with_status_code(route.status)
-        .with_header(header)
+        .with_header(
+            Header::from_bytes(&b"Content-Type"[..], route.content_type.as_bytes())
+                .expect("static content type header"),
+        );
+
+    if let Some(value) = origin.filter(|value| is_loopback_origin(value)) {
+        response = response
+            .with_header(
+                Header::from_bytes(&b"Access-Control-Allow-Origin"[..], value.as_bytes())
+                    .expect("origin header"),
+            )
+            .with_header(Header::from_bytes(&b"Vary"[..], &b"Origin"[..]).expect("vary header"))
+            .with_header(
+                Header::from_bytes(
+                    &b"Access-Control-Allow-Headers"[..],
+                    &b"Authorization, Content-Type"[..],
+                )
+                .expect("allow headers header"),
+            )
+            .with_header(
+                Header::from_bytes(
+                    &b"Access-Control-Allow-Methods"[..],
+                    &b"GET, POST, DELETE, OPTIONS"[..],
+                )
+                .expect("allow methods header"),
+            );
+    }
+
+    response
+}
+
+/// ループバック（`localhost` / `127.0.0.1` / `[::1]`）のオリジンだけを許可します。
+fn is_loopback_origin(origin: &str) -> bool {
+    let rest = match origin
+        .strip_prefix("http://")
+        .or_else(|| origin.strip_prefix("https://"))
+    {
+        Some(rest) => rest,
+
+        None => return false,
+    };
+
+    let authority = rest.split('/').next().unwrap_or(rest);
+
+    let host = if let Some(rest) = authority.strip_prefix("[::1]") {
+        return rest.is_empty() || rest.starts_with(':');
+    } else {
+        authority.split(':').next().unwrap_or(authority)
+    };
+
+    host == "localhost" || host == "127.0.0.1"
 }
 
 #[cfg(test)]
@@ -599,5 +660,24 @@ mod tests {
         assert!(!token.is_empty());
 
         assert!(token.chars().all(|character| character.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn allows_only_loopback_origins() {
+        assert!(super::is_loopback_origin("http://localhost:4173"));
+
+        assert!(super::is_loopback_origin("http://127.0.0.1:8080"));
+
+        assert!(super::is_loopback_origin("https://localhost"));
+
+        assert!(super::is_loopback_origin("http://[::1]:3000"));
+
+        assert!(!super::is_loopback_origin("http://example.com"));
+
+        assert!(!super::is_loopback_origin("http://evil.com:80"));
+
+        assert!(!super::is_loopback_origin("tauri://localhost"));
+
+        assert!(!super::is_loopback_origin(""));
     }
 }
