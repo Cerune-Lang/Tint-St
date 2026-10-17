@@ -1,6 +1,4 @@
-pub mod cerune_cli;
-mod history;
-pub mod interface;
+pub use tint_core::{cerune_cli, history, interface};
 
 use interface::{
     CheckRequest, CompareKind, CompareRequest, Diagnostic, ExecuteRequest, ExecutionPath,
@@ -10,38 +8,7 @@ use interface::{
 
 #[tauri::command]
 fn rename_source(path: String, new_name: String) -> Result<String, String> {
-    let new_name = new_name.trim();
-
-    if new_name.is_empty() {
-        return Err("file name cannot be empty".to_owned());
-    }
-
-    if new_name.contains('/') || new_name.contains('\\') {
-        return Err("file name cannot contain path separators".to_owned());
-    }
-
-    let new_name = if new_name.ends_with(".ceru") {
-        new_name.to_owned()
-    } else {
-        format!("{new_name}.ceru")
-    };
-
-    let old_path = std::path::PathBuf::from(path);
-
-    let parent = old_path
-        .parent()
-        .ok_or_else(|| "file has no parent directory".to_owned())?;
-
-    let new_path = parent.join(new_name);
-
-    if new_path.exists() {
-        return Err("a file with that name already exists".to_owned());
-    }
-
-    std::fs::rename(&old_path, &new_path)
-        .map_err(|error| format!("failed to rename file: {error}"))?;
-
-    Ok(new_path.to_string_lossy().into_owned())
+    tint_core::source::rename_source(&path, &new_name)
 }
 
 #[tauri::command]

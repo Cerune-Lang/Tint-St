@@ -5,8 +5,8 @@
 
 use std::process::Command;
 
-use tauri_app_lib::cerune_cli;
-use tauri_app_lib::interface::{
+use tint_core::cerune_cli;
+use tint_core::interface::{
     CheckRequest, CompareKind, CompareRequest, ExecuteRequest, ExecutionPath, ModulesRequest,
     ObserveRequest, Target,
 };

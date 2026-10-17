@@ -1,0 +1,3 @@
+[workspace]
+resolver = "2"
+members = ["core", "tint-server", "src-tauri"]
