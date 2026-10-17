@@ -337,7 +337,15 @@ Tauri 版は全フィールドが `true` のため、現行 UI は変化しま�
 
 ### ブラウザ WASM 版（開発中）
 
-`npm run build:wasm` で `experiments/wasm/pkg/` を生成し、その中身を
-`public/wasm/` へ配置してから `npm run build` すると、クエリ無しでブラウザ
-から WASM 版が起動します（配置は現状手動。CI では自動化予定）。提供できる
-機能は `capabilities()` に従って自動的に制限されます。
+`npm run build:pages` を実行すると、`scripts/prepare-wasm.mjs` が
+`experiments/wasm` を wasm-pack でビルドし、生成物を `public/wasm/` へ
+配置したうえで Vite ビルドします。サブパス配信時は `VITE_BASE`
+（例: `VITE_BASE=/Tint-St/`）を設定します。
+
+```sh
+VITE_BASE=/Tint-St/ npm run build:pages
+```
+
+クエリ無しでブラウザから開くと WASM 版が起動します。提供できる機能は
+`capabilities()` に従って自動的に制限され、未対応機能は無効化されます。
+生成物（`public/wasm/`）はバージョン管理しません。
