@@ -3,6 +3,11 @@ import {
 } from "@codemirror/view";
 
 import {
+  Compartment,
+  type EditorState,
+} from "@codemirror/state";
+
+import {
   lintGutter,
   linter,
 } from "@codemirror/lint";
@@ -565,6 +570,7 @@ interface Settings {
   target: Target;
   origins: boolean;
   nativeSsa: boolean;
+  wrap: boolean;
   stringHeapLimit: string;
   arrayHeapLimit: string;
 }
@@ -599,6 +605,7 @@ function currentSettings(): Settings {
     target: selectedTarget(),
     origins: annotateOrigins(),
     nativeSsa: nativeSsa(),
+    wrap: wrapEnabled(),
     stringHeapLimit:
       heapLimit("#string-heap-limit") ?? "",
     arrayHeapLimit:
@@ -653,6 +660,19 @@ function applySettings(
     }
   }
 
+  if (typeof settings.wrap === "boolean") {
+    const toggle =
+      document.querySelector<HTMLInputElement>(
+        "#wrap-toggle",
+      );
+
+    if (toggle) {
+      toggle.checked = settings.wrap;
+    }
+  }
+
+  applyWrap();
+
   if (typeof settings.stringHeapLimit === "string") {
     const input =
       document.querySelector<HTMLInputElement>(
@@ -681,6 +701,7 @@ function bindSettingsPersistence() {
     "#target-select",
     "#origins-toggle",
     "#native-ssa-toggle",
+    "#wrap-toggle",
     "#string-heap-limit",
     "#array-heap-limit",
   ];
@@ -1311,6 +1332,91 @@ const ceruneLinter = linter(
   { delay: 500 },
 );
 
+const wrapCompartment = new Compartment();
+
+function wrapEnabled(): boolean {
+  const element =
+    document.querySelector<HTMLInputElement>(
+      "#wrap-toggle",
+    );
+
+  return element?.checked ?? false;
+}
+
+function applyWrap() {
+  sourceView?.dispatch({
+    effects: wrapCompartment.reconfigure(
+      wrapEnabled()
+        ? EditorView.lineWrapping
+        : [],
+    ),
+  });
+}
+
+function updateCursorPosition(
+  state: EditorState,
+) {
+  const element =
+    document.querySelector<HTMLElement>(
+      "#cursor-position",
+    );
+
+  if (!element) {
+    return;
+  }
+
+  const head = state.selection.main.head;
+
+  const line = state.doc.lineAt(head);
+
+  element.textContent =
+    `${line.number}:${head - line.from + 1}`;
+}
+
+function goToLine() {
+  if (!sourceView) {
+    return;
+  }
+
+  const current =
+    sourceView.state.doc.lineAt(
+      sourceView.state.selection.main.head,
+    ).number;
+
+  const input = window.prompt(
+    "Go to line",
+    String(current),
+  );
+
+  if (input === null) {
+    return;
+  }
+
+  const lineNumber = Number.parseInt(
+    input.trim(),
+    10,
+  );
+
+  if (!Number.isFinite(lineNumber)) {
+    return;
+  }
+
+  const clamped = Math.min(
+    Math.max(lineNumber, 1),
+    sourceView.state.doc.lines,
+  );
+
+  const line =
+    sourceView.state.doc.line(clamped);
+
+  sourceView.dispatch({
+    selection: { anchor: line.from },
+    scrollIntoView: true,
+  });
+
+  sourceView.focus();
+}
+
 const editorTheme =
   EditorView.theme({
     "&": {
@@ -1433,9 +1539,24 @@ window.addEventListener(
         ceruneHighlighting,
         ceruneLinter,
         lintGutter(),
+        wrapCompartment.of([]),
+        EditorView.updateListener.of(
+          (update) => {
+            if (
+              update.selectionSet ||
+              update.docChanged
+            ) {
+              updateCursorPosition(
+                update.state,
+              );
+            }
+          },
+        ),
         editorTheme,
       ]
     });
+
+    updateCursorPosition(sourceView.state);
 
     window.addEventListener(
       "keydown",
@@ -1463,6 +1584,16 @@ window.addEventListener(
           event.stopPropagation();
 
           void openFile();
+          return;
+        }
+
+        if (
+          event.key.toLowerCase() === "g"
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+
+          goToLine();
           return;
         }
 
@@ -1524,6 +1655,15 @@ window.addEventListener(
         "click",
         () => {
           void saveSnapshot();
+        },
+      );
+
+    document
+      .querySelector("#wrap-toggle")
+      ?.addEventListener(
+        "change",
+        () => {
+          applyWrap();
         },
       );
 

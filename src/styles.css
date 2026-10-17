@@ -504,6 +504,17 @@ button {
   font-weight: 600;
 }
 
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cursor-position {
+  color: #9ab0bf;
+  font-variant-numeric: tabular-nums;
+}
+
 .shortcut {
   color: #9ab0bf;
 }

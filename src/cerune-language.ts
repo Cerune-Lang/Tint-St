@@ -4,13 +4,129 @@ import {
   syntaxHighlighting,
 } from "@codemirror/language";
 
+import {
+  type CompletionContext,
+  type CompletionSource,
+} from "@codemirror/autocomplete";
+
 import { tags } from "@lezer/highlight";
 
-const keywords =
-  /^(?:import|as|pub|const|enum|match|type|fn|return|void|print|mut|if|else|while|for|in|break|continue|true|false)\b/;
+const keywordList = [
+  "import",
+  "as",
+  "pub",
+  "const",
+  "enum",
+  "match",
+  "type",
+  "fn",
+  "return",
+  "void",
+  "print",
+  "mut",
+  "if",
+  "else",
+  "while",
+  "for",
+  "in",
+  "break",
+  "continue",
+  "true",
+  "false",
+];
 
-const builtinTypes =
-  /^(?:i8|u8|i16|u16|i32|u32|i64|u64|f32|f64|bool|string|infer)\b/;
+const typeList = [
+  "i8",
+  "u8",
+  "i16",
+  "u16",
+  "i32",
+  "u32",
+  "i64",
+  "u64",
+  "f32",
+  "f64",
+  "bool",
+  "string",
+  "infer",
+];
+
+const keywords = new RegExp(
+  `^(?:${keywordList.join("|")})\\b`,
+);
+
+const builtinTypes = new RegExp(
+  `^(?:${typeList.join("|")})\\b`,
+);
+
+const keywordSet = new Set(keywordList);
+
+const typeSet = new Set(typeList);
+
+const keywordOptions = keywordList.map((label) => ({
+  label,
+  type: "keyword",
+}));
+
+const typeOptions = typeList.map((label) => ({
+  label,
+  type: "type",
+}));
+
+const ceruneCompletionSource: CompletionSource = (
+  context: CompletionContext,
+) => {
+  const word = context.matchBefore(
+    /[A-Za-z_][A-Za-z0-9_]*/,
+  );
+
+  if (!word) {
+    return null;
+  }
+
+  if (
+    word.from === word.to &&
+    !context.explicit
+  ) {
+    return null;
+  }
+
+  const text = context.state.doc.toString();
+
+  const identifiers = new Set<string>();
+
+  for (const match of text.matchAll(
+    /[A-Za-z_][A-Za-z0-9_]*/g,
+  )) {
+    const value = match[0];
+
+    if (
+      !keywordSet.has(value) &&
+      !typeSet.has(value)
+    ) {
+      identifiers.add(value);
+    }
+  }
+
+  const variableOptions = Array.from(
+    identifiers,
+  )
+    .sort()
+    .map((label) => ({
+      label,
+      type: "variable",
+    }));
+
+  return {
+    from: word.from,
+
+    options: [
+      ...keywordOptions,
+      ...typeOptions,
+      ...variableOptions,
+    ],
+  };
+};
 
 export const ceruneLanguage =
   StreamLanguage.define<null>({
@@ -87,6 +203,8 @@ export const ceruneLanguage =
       commentTokens: {
         line: "//",
       },
+
+      autocomplete: ceruneCompletionSource,
     },
   });
 

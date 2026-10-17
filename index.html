@@ -136,6 +136,17 @@
                 Native SSA
               </label>
 
+              <label
+                class="origins-option"
+                title="Wrap long lines"
+              >
+                <input
+                  id="wrap-toggle"
+                  type="checkbox"
+                />
+                Wrap
+              </label>
+
               <button
                 id="emit-button"
                 type="button"
@@ -586,9 +597,16 @@
           ></span>
         </div>
 
-        <span class="shortcut">
-          Ctrl + Enter
-        </span>
+        <div class="status-right">
+          <span
+            id="cursor-position"
+            class="cursor-position"
+          ></span>
+
+          <span class="shortcut">
+            Ctrl + Enter
+          </span>
+        </div>
       </footer>
     </div>
   </body>
