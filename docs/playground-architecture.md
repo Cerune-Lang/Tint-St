@@ -143,6 +143,11 @@
     再現性を確保する。
   - WASM 生成後に Vite でブラウザ版をビルドし、静的成果物を
     GitHub Pages へ配布する（Pages 用 base path を含む）。
+  - 実装: `.github/workflows/pages.yml`（`build` → `deploy`）。Rust
+    `1.98.0` / wasm-pack `0.15.0` / Node `20` にバージョン固定し、
+    `main` への push と手動実行で起動する。
+  - 配信先はカスタムドメイン `tint.hokutaka.dev`（apex）のため、Vite の
+    base は既定の `/`（サブパス配信時は `VITE_BASE` で上書き）。
   - 検証: ローカルで from-scratch ビルドが再現することを確認済み
     （`tint_wasm_bg.wasm` のサイズが一致）。
 - 実装状況（フェーズ 4）:
@@ -296,9 +301,8 @@ Tauri 版は全フィールドが `true` のため、現行 UI は変化しま�
     初期化に失敗した場合は未対応機能を有効に見せないよう全機能を
     無効化し、エラーを表示する。
 - 未実装:
-  - 方式 C の実配布: WASM を Vite ビルドに組み込み、GitHub Actions で
-    Cerune を固定チェックアウトして生成し、GitHub Pages へ配布する
-    （CI ワークフローと Pages 用 base path は未作成）。
+  - 方式 C のデプロイ実地確認（`.github/workflows/pages.yml` は追加済み。
+    実際の Pages 配信結果の確認は未実施）。
   - 方式 C の `modules`（import 解決）対応。
 
 ### 自動起動方式の補足
@@ -348,4 +352,5 @@ VITE_BASE=/Tint-St/ npm run build:pages
 
 クエリ無しでブラウザから開くと WASM 版が起動します。提供できる機能は
 `capabilities()` に従って自動的に制限され、未対応機能は無効化されます。
-生成物（`public/wasm/`）はバージョン管理しません。
+生成物（`public/wasm/`）はバージョン管理しません。`main` への push では
+`.github/workflows/pages.yml` が `https://tint.hokutaka.dev/` へ配信します。
