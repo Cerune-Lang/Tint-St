@@ -88,6 +88,10 @@ pub struct Observation {
     pub mir: String,
     pub ssa: String,
 
+    pub ssa_map: String,
+    pub ssa_lowered: String,
+    pub manifest: String,
+
     pub c: String,
     pub c_asm: String,
 

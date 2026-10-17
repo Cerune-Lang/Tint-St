@@ -46,6 +46,9 @@ type OutputKind =
   | "ir"
   | "mir"
   | "ssa"
+  | "ssaMap"
+  | "ssaLowered"
+  | "manifest"
   | "c"
   | "cAsm"
   | "llvm"
@@ -67,6 +70,10 @@ interface ObservationResult {
   ir: string;
   mir: string;
   ssa: string;
+
+  ssaMap: string;
+  ssaLowered: string;
+  manifest: string;
 
   c: string;
   cAsm: string;
@@ -95,6 +102,10 @@ const outputs: Record<
   ir: "",
   mir: "",
   ssa: "",
+
+  ssaMap: "",
+  ssaLowered: "",
+  manifest: "",
 
   c: "",
   cAsm: "",

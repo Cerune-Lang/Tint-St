@@ -109,11 +109,18 @@ pub fn observe(request: ObserveRequest) -> Result<Observation, String> {
 
         let bytecode = run_cerune_with_heap("emit-bytecode", &source_path, &[], &heap)?;
 
+        let (ssa_map, ssa_lowered, manifest) =
+            run_cerune_observe(&source_path, target_name, &heap)?;
+
         Ok(Observation {
             sources,
             ir,
             mir,
             ssa,
+
+            ssa_map,
+            ssa_lowered,
+            manifest,
 
             c,
             c_asm,
@@ -248,6 +255,49 @@ fn run_cerune_with_heap(
     merged.extend(heap.iter().map(String::as_str));
 
     run_cerune(command, source_path, &merged)
+}
+
+fn run_cerune_observe(
+    source_path: &Path,
+    target: &str,
+    heap: &[String],
+) -> Result<(String, String, String), String> {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+
+    let directory = std::env::temp_dir().join(format!(
+        "tint-observe-{}-{timestamp}",
+        process::id(),
+    ));
+
+    let _ = fs::remove_dir_all(&directory);
+
+    let directory_text = directory.to_string_lossy().into_owned();
+
+    let mut args = vec!["--ssa", "--target", target, "-o", directory_text.as_str()];
+
+    args.extend(heap.iter().map(String::as_str));
+
+    let result = (|| {
+        run_cerune("observe", source_path, &args)?;
+
+        let ssa_map = fs::read_to_string(directory.join("program.ssa-map.txt"))
+            .map_err(|error| format!("failed to read SSA mapping: {error}"))?;
+
+        let ssa_lowered = fs::read_to_string(directory.join("program.ssa-lowered.mir.txt"))
+            .map_err(|error| format!("failed to read SSA-lowered MIR: {error}"))?;
+
+        let manifest = fs::read_to_string(directory.join("manifest.json"))
+            .map_err(|error| format!("failed to read observation manifest: {error}"))?;
+
+        Ok((ssa_map, ssa_lowered, manifest))
+    })();
+
+    let _ = fs::remove_dir_all(&directory);
+
+    result
 }
 
 fn run_cerune_object(
