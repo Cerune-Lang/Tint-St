@@ -1,0 +1,12 @@
+[package]
+name = "tint-server"
+version = "0.1.0"
+description = "Local HTTP server exposing the Tint/Cerune observation API for the browser Playground"
+authors = ["you"]
+edition = "2021"
+
+[dependencies]
+tint-core = { path = "../core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tiny_http = "0.12"
