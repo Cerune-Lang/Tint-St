@@ -17,132 +17,57 @@ import {
 } from "codemirror";
 
 import {
-  open,
-  save,
-} from "@tauri-apps/plugin-dialog";
+  createTauriBackend,
+  createTauriHost,
+} from "./backend-tauri";
 
-import {
-  getCurrentWindow,
-} from "@tauri-apps/api/window";
+import type {
+  BackendCapabilities,
+  TintBackend,
+} from "./backend";
 
-import {
-  readTextFile,
-  writeTextFile,
-} from "@tauri-apps/plugin-fs";
-
-import { invoke } from "@tauri-apps/api/core";
+import type { TintHost } from "./host";
 
 import {
   ceruneHighlighting,
   ceruneLanguage,
 } from "./cerune-language";
 
-type Target =
-  | "x86_64-pc-windows-msvc"
-  | "x86_64-unknown-linux-gnu";
+import {
+  buildByteToChar,
+  charRangeForBytes,
+  isInstructionLine,
+  parseOriginAnnotations,
+  type OriginAnnotation,
+} from "./origins";
 
-type ExecutionPath =
-  | "ir"
-  | "mir"
-  | "ssa"
-  | "vm";
+import {
+  directoryOf,
+  normalizePath,
+  parseImports,
+} from "./imports";
 
-interface ExecutionResult {
-  output: string;
-}
+import { diagnosticOffsets } from "./diagnostics";
 
-type OutputKind =
-  | "sources"
-  | "ir"
-  | "mir"
-  | "ssa"
-  | "ssaMap"
-  | "ssaLowered"
-  | "ssaLoweredMap"
-  | "manifest"
-  | "c"
-  | "cAsm"
-  | "llvm"
-  | "llvmAsm"
-  | "wat"
-  | "qbe"
-  | "qbeAsm"
-  | "lir"
-  | "directAsm"
-  | "object"
-  | "bytecode"
-  | "irOutput"
-  | "mirOutput"
-  | "ssaOutput"
-  | "vmOutput"
-  | "cmpLir"
-  | "cmpDirectAsm"
-  | "cmpObject"
-  | "cmpLlvm"
-  | "cmpLlvmAsm"
-  | "cmpQbe"
-  | "cmpQbeAsm"
-  | "cmpCAsm"
-  | "modules";
+import {
+  readSettings,
+  writeSettings,
+  type Settings,
+} from "./settings";
 
-interface ObservationResult {
-  sources: string;
-  ir: string;
-  mir: string;
-  ssa: string;
+import type {
+  Diagnostic,
+  ExecutionPath,
+  ModuleFile,
+  OpenFile,
+  OutputKind,
+  SnapshotMeta,
+  Target,
+} from "./types";
 
-  ssaMap: string;
-  ssaLowered: string;
-  ssaLoweredMap: string;
-  manifest: string;
+const backend: TintBackend = createTauriBackend();
 
-  c: string;
-  cAsm: string;
-
-  llvm: string;
-  llvmAsm: string;
-
-  wat: string;
-
-  qbe: string;
-  qbeAsm: string;
-
-  lir: string;
-
-  directAsm: string;
-  object: string;
-
-  bytecode: string;
-}
-
-interface SnapshotMeta {
-  id: string;
-  createdAt: number;
-  label: string;
-  target: string;
-}
-
-interface Snapshot {
-  id: string;
-  createdAt: number;
-  label: string;
-  target: string;
-  source: string;
-  outputs: Record<string, string>;
-}
-
-interface Diagnostic {
-  line: number;
-  column: number;
-  message: string;
-  severity: string;
-}
-
-interface ModuleFile {
-  id: number;
-  name: string;
-  text: string;
-}
+const host: TintHost = createTauriHost();
 
 const outputs: Record<
   OutputKind,
@@ -207,12 +132,6 @@ let activeOutput: OutputKind = "ir";
 let activeGroup = "pipeline";
 let activeBackend = "c";
 let currentPath: string | null = null;
-
-interface OpenFile {
-  path: string;
-  name: string;
-  text: string;
-}
 
 const openFiles = new Map<string, OpenFile>();
 
@@ -376,109 +295,13 @@ function compareKindForOutput(
   }
 }
 
-interface OriginAnnotation {
-  line: number;
-  node: string;
-  start: number;
-  end: number;
-}
-
 interface OriginLine {
   span: HTMLSpanElement;
   start: number;
   end: number;
 }
 
-const originPattern =
-  /cerune-origin:\s*#(\S+)\s+bytes\s+(\d+)\.\.(\d+)/;
-
 let currentOriginLines: OriginLine[] = [];
-
-function parseOriginAnnotations(
-  text: string,
-): OriginAnnotation[] {
-  const annotations: OriginAnnotation[] = [];
-
-  const lines = text.split("\n");
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const match = originPattern.exec(
-      lines[index],
-    );
-
-    if (!match) {
-      continue;
-    }
-
-    annotations.push({
-      line: index,
-      node: match[1],
-      start: Number(match[2]),
-      end: Number(match[3]),
-    });
-  }
-
-  return annotations;
-}
-
-function buildByteToChar(text: string): Uint32Array {
-  const bytes = new TextEncoder().encode(text);
-
-  const map = new Uint32Array(bytes.length + 1);
-
-  let byte = 0;
-
-  let char = 0;
-
-  while (char < text.length) {
-    const codePoint = text.codePointAt(char) ?? 0;
-
-    const units = codePoint > 0xffff ? 2 : 1;
-
-    const size =
-      codePoint < 0x80
-        ? 1
-        : codePoint < 0x800
-          ? 2
-          : codePoint < 0x10000
-            ? 3
-            : 4;
-
-    for (let offset = 0; offset < size; offset += 1) {
-      map[byte + offset] = char;
-    }
-
-    byte += size;
-
-    char += units;
-  }
-
-  map[byte] = text.length;
-
-  return map;
-}
-
-function isInstructionLine(line: string): boolean {
-  const trimmed = line.trim();
-
-  if (!trimmed) {
-    return false;
-  }
-
-  if (trimmed === "{" || trimmed === "}") {
-    return false;
-  }
-
-  if (/^[#;.]/.test(trimmed)) {
-    return false;
-  }
-
-  if (trimmed.endsWith(":")) {
-    return false;
-  }
-
-  return true;
-}
 
 function renderOutput(
   kind: OutputKind,
@@ -540,13 +363,12 @@ function renderOutput(
     }
 
     if (last && isInstructionLine(line)) {
-      const start = byteToChar[
-        Math.min(last.start, byteToChar.length - 1)
-      ];
-
-      const end = byteToChar[
-        Math.min(last.end, byteToChar.length - 1)
-      ];
+      const { from: start, to: end } =
+        charRangeForBytes(
+          byteToChar,
+          last.start,
+          last.end,
+        );
 
       span.classList.add("origin");
 
@@ -849,40 +671,18 @@ function heapLimit(
   return value.length > 0 ? value : null;
 }
 
-const settingsKey = "tint.settings";
-
-interface Settings {
-  target: Target;
-  origins: boolean;
-  nativeSsa: boolean;
-  wrap: boolean;
-  stringHeapLimit: string;
-  arrayHeapLimit: string;
-}
-
-function readSettings(): Partial<Settings> {
-  try {
-    const raw =
-      localStorage.getItem(settingsKey);
-
-    if (!raw) {
-      return {};
-    }
-
-    const parsed: unknown =
-      JSON.parse(raw);
-
-    if (
-      typeof parsed === "object" &&
-      parsed !== null
-    ) {
-      return parsed as Partial<Settings>;
-    }
-
-    return {};
-  } catch {
-    return {};
-  }
+function heapArgs(): {
+  stringHeapLimit: string | null;
+  arrayHeapLimit: string | null;
+} {
+  return {
+    stringHeapLimit: heapLimit(
+      "#string-heap-limit",
+    ),
+    arrayHeapLimit: heapLimit(
+      "#array-heap-limit",
+    ),
+  };
 }
 
 function currentSettings(): Settings {
@@ -899,14 +699,7 @@ function currentSettings(): Settings {
 }
 
 function saveSettings() {
-  try {
-    localStorage.setItem(
-      settingsKey,
-      JSON.stringify(currentSettings()),
-    );
-  } catch {
-    // 設定の保存に失敗しても観測は継続します。
-  }
+  writeSettings(currentSettings());
 }
 
 function applySettings(
@@ -1019,47 +812,6 @@ function setEditorText(text: string) {
       insert: text,
     },
   });
-}
-
-function normalizePath(path: string): string {
-  return path
-    .replace(/^\\\\\?\\/, "")
-    .replace(/\\/g, "/")
-    .toLowerCase();
-}
-
-function directoryOf(path: string): string {
-  const index = Math.max(
-    path.lastIndexOf("/"),
-    path.lastIndexOf("\\"),
-  );
-
-  return index >= 0
-    ? path.slice(0, index)
-    : "";
-}
-
-function parseImports(
-  text: string,
-): { path: string; alias: string }[] {
-  const imports: {
-    path: string;
-    alias: string;
-  }[] = [];
-
-  const pattern =
-    /import\s+"([^"]+)"\s+as\s+([A-Za-z_][A-Za-z0-9_]*)\s*;/g;
-
-  let match: RegExpExecArray | null;
-
-  while ((match = pattern.exec(text)) !== null) {
-    imports.push({
-      path: match[1],
-      alias: match[2],
-    });
-  }
-
-  return imports;
 }
 
 function refreshFileTabs() {
@@ -1352,12 +1104,9 @@ async function runLoadModules() {
   setStatus("Loading modules…", "working");
 
   try {
-    const files = await invoke<ModuleFile[]>(
-      "load_modules",
-      {
-        source: sourceText(),
-        sourcePath: currentPath,
-      },
+    const files = await backend.loadModules(
+      sourceText(),
+      currentPath,
     );
 
     loadedModules = files;
@@ -1381,21 +1130,13 @@ async function runLoadModules() {
 }
 
 async function openFile() {
-  const path = await open({
-    multiple: false,
-    filters: [
-      {
-        name: "Cerune",
-        extensions: ["ceru"],
-      },
-    ],
-  });
+  const path = await host.openSource();
 
-  if (!path || Array.isArray(path)) {
+  if (!path) {
     return;
   }
 
-  const source = await readTextFile(path);
+  const source = await host.readText(path);
 
   openFiles.set(path, {
     path,
@@ -1416,21 +1157,14 @@ async function saveFile() {
   let path = currentPath;
 
   if (!path) {
-    path = await save({
-      filters: [
-        {
-          name: "Cerune",
-          extensions: ["ceru"],
-        },
-      ],
-    });
+    path = await host.saveSource(null);
   }
 
   if (!path) {
     return;
   }
 
-  await writeTextFile(
+  await host.writeText(
     path,
     sourceText(),
   );
@@ -1491,20 +1225,12 @@ async function runExecution() {
 
   try {
     const result =
-      await invoke<ExecutionResult>(
-        "execute",
-        {
-          source: sourceText(),
-          sourcePath: currentPath,
-          path,
-          stringHeapLimit: heapLimit(
-            "#string-heap-limit",
-          ),
-          arrayHeapLimit: heapLimit(
-            "#array-heap-limit",
-          ),
-        },
-      );
+      await backend.execute({
+        source: sourceText(),
+        sourcePath: currentPath,
+        path,
+        ...heapArgs(),
+      });
 
     outputs[activeOutput] =
       result.output;
@@ -1554,22 +1280,14 @@ async function emit() {
 
   try {
     const result =
-      await invoke<ObservationResult>(
-        "emit_all",
-        {
-          source: sourceText(),
-          target: selectedTarget(),
-          annotateOrigins: annotateOrigins(),
-          nativeSsa: nativeSsa(),
-          sourcePath: currentPath,
-          stringHeapLimit: heapLimit(
-            "#string-heap-limit",
-          ),
-          arrayHeapLimit: heapLimit(
-            "#array-heap-limit",
-          ),
-        },
-      );
+      await backend.observe({
+        source: sourceText(),
+        target: selectedTarget(),
+        annotateOrigins: annotateOrigins(),
+        nativeSsa: nativeSsa(),
+        sourcePath: currentPath,
+        ...heapArgs(),
+      });
 
     Object.assign(outputs, result);
 
@@ -1619,22 +1337,14 @@ async function runCompare() {
 
   try {
     const diff =
-      await invoke<string>(
-        "compare_targets",
-        {
-          source: sourceText(),
-          sourcePath: currentPath,
-          kind,
-          annotateOrigins: annotateOrigins(),
-          nativeSsa: nativeSsa(),
-          stringHeapLimit: heapLimit(
-            "#string-heap-limit",
-          ),
-          arrayHeapLimit: heapLimit(
-            "#array-heap-limit",
-          ),
-        },
-      );
+      await backend.compare({
+        source: sourceText(),
+        sourcePath: currentPath,
+        kind,
+        annotateOrigins: annotateOrigins(),
+        nativeSsa: nativeSsa(),
+        ...heapArgs(),
+      });
 
     outputs[activeOutput] = diff;
 
@@ -1704,9 +1414,7 @@ async function refreshSnapshots() {
 
   try {
     metas =
-      await invoke<SnapshotMeta[]>(
-        "list_snapshots",
-      );
+      await backend.listSnapshots();
   } catch {
     metas = [];
   }
@@ -1782,13 +1490,11 @@ async function saveSnapshot() {
   }
 
   try {
-    await invoke("save_snapshot", {
-      snapshot: {
-        label,
-        target,
-        source: sourceText(),
-        outputs: snapshotOutputs,
-      },
+    await backend.saveSnapshot({
+      label,
+      target,
+      source: sourceText(),
+      outputs: snapshotOutputs,
     });
 
     await refreshSnapshots();
@@ -1809,26 +1515,20 @@ async function showSnapshotDiff(id: string) {
 
   try {
     const snapshot =
-      await invoke<Snapshot>(
-        "read_snapshot",
-        { id },
-      );
+      await backend.readSnapshot(id);
 
     const label = outputLabelForKind(
       activeOutput,
     );
 
-    const diff = await invoke<string>(
-      "diff_text",
-      {
-        left:
-          snapshot.outputs[activeOutput] ??
-          "",
-        right: outputs[activeOutput],
-        leftLabel: `snapshot (${snapshot.label})`,
-        rightLabel: "current",
-      },
-    );
+    const diff = await backend.diff({
+      left:
+        snapshot.outputs[activeOutput] ??
+        "",
+      right: outputs[activeOutput],
+      leftLabel: `snapshot (${snapshot.label})`,
+      rightLabel: "current",
+    });
 
     outputElement().textContent =
       `# ${label}\n${diff}`;
@@ -1852,7 +1552,7 @@ async function deleteSelectedSnapshot() {
   }
 
   try {
-    await invoke("delete_snapshot", { id });
+    await backend.deleteSnapshot(id);
 
     const select =
       document.querySelector<HTMLSelectElement>(
@@ -1875,23 +1575,15 @@ async function deleteSelectedSnapshot() {
 }
 
 async function saveAsFile() {
-  const path = await save({
-    defaultPath:
-      currentPath ?? "Untitled.ceru",
-
-    filters: [
-      {
-        name: "Cerune",
-        extensions: ["ceru"],
-      },
-    ],
-  });
+  const path = await host.saveSource(
+    currentPath ?? "Untitled.ceru",
+  );
 
   if (!path) {
     return;
   }
 
-  await writeTextFile(
+  await host.writeText(
     path,
     sourceText(),
   );
@@ -1945,8 +1637,7 @@ async function updateFileName(
     element.title =
       "Click to rename";
 
-    await getCurrentWindow()
-      .setTitle("Tint* Workspace");
+    await host.setTitle("Tint* Workspace");
 
     return;
   }
@@ -1957,8 +1648,7 @@ async function updateFileName(
   element.textContent = name;
   element.title = path;
 
-  await getCurrentWindow()
-    .setTitle(`Tint* — ${name}`);
+  await host.setTitle(`Tint* — ${name}`);
 }
 
 const ceruneLinter = linter(
@@ -1969,14 +1659,10 @@ const ceruneLinter = linter(
     let diagnostics: Diagnostic[] = [];
 
     try {
-      diagnostics =
-        await invoke<Diagnostic[]>(
-          "check_source",
-          {
-            source,
-            sourcePath: currentPath,
-          },
-        );
+      diagnostics = await backend.check(
+        source,
+        currentPath,
+      );
     } catch {
       setDiagnosticStatus(null);
       return [];
@@ -1984,29 +1670,23 @@ const ceruneLinter = linter(
 
     setDiagnosticStatus(diagnostics.length);
 
+    const doc = view.state.doc;
+
+    const lineLengths: number[] = [];
+
+    for (let line = 1; line <= doc.lines; line += 1) {
+      lineLengths.push(doc.line(line).length);
+    }
+
     return diagnostics.map((diagnostic) => {
-      const lineNumber = Math.min(
-        Math.max(diagnostic.line, 1),
-        view.state.doc.lines,
-      );
-
-      const line =
-        view.state.doc.line(lineNumber);
-
-      const position = Math.min(
-        line.from +
-          Math.max(diagnostic.column - 1, 0),
-        line.to,
-      );
-
-      const to = Math.min(
-        position + 1,
-        line.to,
+      const { from, to } = diagnosticOffsets(
+        diagnostic,
+        lineLengths,
       );
 
       return {
-        from: position,
-        to: Math.max(to, position),
+        from,
+        to,
         severity: "error" as const,
         message: diagnostic.message,
       };
@@ -2174,12 +1854,9 @@ async function renameCurrentFile() {
 
   try {
     const newPath =
-      await invoke<string>(
-        "rename_source",
-        {
-          path: currentPath,
-          newName,
-        },
+      await backend.renameSource(
+        currentPath,
+        newName,
       );
 
     const oldPath = currentPath;
@@ -2209,6 +1886,85 @@ async function renameCurrentFile() {
 
     outputElement().textContent =
       String(error);
+  }
+}
+
+function setGroupEnabled(
+  group: string,
+  enabled: boolean,
+) {
+  document
+    .querySelectorAll<HTMLButtonElement>(
+      `.group-tab[data-group="${group}"], ` +
+        `.tab[data-group="${group}"]`,
+    )
+    .forEach((button) => {
+      button.disabled = !enabled;
+    });
+}
+
+function applyCapabilities(
+  capabilities: BackendCapabilities,
+) {
+  setGroupEnabled(
+    "compare",
+    capabilities.compare,
+  );
+
+  setGroupEnabled(
+    "modules",
+    capabilities.modules,
+  );
+
+  setGroupEnabled(
+    "execution",
+    capabilities.execute,
+  );
+
+  const emitButton =
+    document.querySelector<HTMLButtonElement>(
+      "#emit-button",
+    );
+
+  if (emitButton) {
+    emitButton.disabled =
+      !capabilities.observe;
+  }
+
+  [
+    "#snapshot-button",
+    "#snapshot-select",
+  ].forEach((selector) => {
+    const element =
+      document.querySelector<HTMLElement>(
+        selector,
+      );
+
+    if (element) {
+      element.toggleAttribute(
+        "disabled",
+        !capabilities.snapshots,
+      );
+    }
+  });
+
+  const fileName =
+    document.querySelector<HTMLButtonElement>(
+      "#file-name",
+    );
+
+  if (fileName) {
+    fileName.disabled = !capabilities.rename;
+  }
+}
+
+async function initCapabilities() {
+  try {
+    applyCapabilities(
+      await backend.capabilities(),
+    );
+  } catch {
+    // 機能フラグを取得できない場合は、既定（すべて有効）を維持します。
   }
 }
 
@@ -2468,6 +2224,8 @@ showGroup("pipeline");
     applySettings(readSettings());
 
     bindSettingsPersistence();
+
+    void initCapabilities();
 
     void refreshSnapshots();
 
