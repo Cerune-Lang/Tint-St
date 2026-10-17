@@ -275,6 +275,24 @@ cargo fmt
 cargo check
 ```
 
+### テスト
+
+フロントエンド（TypeScript）のユニットテストは `tsx` と Node 標準のテストランナーで実行します。型チェックのあと、純粋ロジック（UTF-8 バイト↔文字変換、Origins 解析、import 解析、診断位置、設定保存）を検証します。
+
+```sh
+npm test
+```
+
+Rust 側は、外部コマンドを使わない単体テストと、実際の `cerune` を呼び出す統合テストを分けています。
+
+```sh
+cd src-tauri
+cargo test --lib                          # 単体テスト（外部コマンドなし）
+cargo test --test cerune_cli_integration  # 統合テスト（要 cerune）
+```
+
+統合テストは `cerune` が見つからない環境ではスキップします。`observe` は `clang` や `wsl qbe` が無い場合、該当する ASM を「unavailable」として扱います。
+
 ## 仕組み
 
 Tint* は、Cerune のコンパイラ実装そのものをアプリケーション内部へ持ち込みません。

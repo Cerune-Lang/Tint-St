@@ -262,6 +262,24 @@ cargo fmt
 cargo check
 ```
 
+### Testing
+
+Frontend (TypeScript) unit tests run with `tsx` and Node's built-in test runner. They cover the pure logic: UTF-8 byte/char mapping, origin parsing, import parsing, diagnostic positions, and settings persistence.
+
+```sh
+npm test
+```
+
+The Rust side separates unit tests that never spawn external commands from integration tests that invoke the real `cerune`.
+
+```sh
+cd src-tauri
+cargo test --lib                          # unit tests (no external commands)
+cargo test --test cerune_cli_integration  # integration tests (requires cerune)
+```
+
+Integration tests are skipped when `cerune` is not on `PATH`. When `clang` or `wsl qbe` is missing, `observe` reports the corresponding assembly as "unavailable".
+
 ## How it works
 
 Tint* does not embed Cerune's compiler implementation inside the application.
