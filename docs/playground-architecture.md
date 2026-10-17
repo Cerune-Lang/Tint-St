@@ -3,9 +3,9 @@
 本ドキュメントは、Tint\* の UI を将来的にブラウザ上で動作させる
 「Cerune Playground」の設計方針をまとめたものです。
 
-**重要: 本ドキュメントは設計のみを扱います。Playground の実装は
-まだ開始していません。** ここに記載された内容は提案であり、現時点の
-デスクトップ版の挙動を変更するものではありません。
+**本ドキュメントは設計と実装状況を扱います。** Playground の実装は
+フェーズ単位で進行中です（最新の状況は第 9・10 節を参照）。提案段階の
+内容はデスクトップ版（Tauri）の挙動を変更しません。
 
 ## 1. 目的
 
@@ -123,12 +123,28 @@
     スナップショット / 改名も対象外。
 - 試作: `experiments/wasm`（クレート名 `tint-wasm`）。
   - ルートの Cargo ワークスペースからは除外（`exclude`）し、単体で
-    ビルドする独立クレート。`cerune-lang` へは path 依存のため、隣接する
-    Cerune チェックアウト（`../Cerune`）が必要。
-  - ビルド: `cd experiments/wasm && wasm-pack build --release --target web`。
-    `wasm-opt` 後に約 1.1 MB の `.wasm` が生成される。
-  - 検証: Node 上で `check` / `emit_ir` / `emit_wat` / `execute("vm")` が
-    動作することを確認済み。
+    ビルドする独立クレート。
+  - `cerune-lang` へは path 依存（`../../../Cerune`）。ローカルでは
+    `Tint` と `Cerune` が同じ親ディレクトリにある兄弟配置を前提とする。
+- ローカルでのビルド手順（検証済みのバージョン）:
+  - Rust `1.98.0`（`wasm32-unknown-unknown` ターゲット）と
+    `wasm-pack` `0.15.0` を使用する。
+  - `npm run build:wasm`
+    （実体: `wasm-pack build experiments/wasm --release --target web`）。
+    `wasm-opt` 後に約 1.1 MB の `.wasm` が `experiments/wasm/pkg/` に
+    生成される。
+  - `npm run test:wasm` で host ネイティブのテストを実行できる。
+  - 生成物（`pkg/`）はバージョン管理しない（`.gitignore` 済み）。
+- 配布（CI）方針:
+  - GitHub Actions で `Cerune-Lang/Cerune` を**タグ固定**
+    （`v0.1.0` / `a93a4d5`）で別途チェックアウトし、ローカルと同じ
+    `Tint` / `Cerune` の兄弟配置を再現して `wasm-pack` を実行する。
+  - ツールチェーン（Rust / wasm-pack / Node）はバージョンを明示して
+    再現性を確保する。
+  - WASM 生成後に Vite でブラウザ版をビルドし、静的成果物を
+    GitHub Pages へ配布する（Pages 用 base path を含む）。
+  - 検証: ローカルで from-scratch ビルドが再現することを確認済み
+    （`tint_wasm_bg.wasm` のサイズが一致）。
 - 実装状況（フェーズ 4）:
   - `src/backend-wasm.ts` に `createWasmBackend(module)` を実装した。
     WASM モジュールは注入する形にし、`wasm-bindgen` のビルド成果物に
@@ -137,11 +153,11 @@
   - `test/backend-wasm.test.ts` で偽モジュールを使い、機能制限を含めて
     検証済み。
 - 残作業:
-  - 実際の `.wasm` をフロントエンドのビルドに組み込む（成果物を同梱する
-    かビルド時に生成するかは未決定）。
+  - 実際の `.wasm` を Vite ビルドに組み込み、Pages 用 base path と
+    アセット読込を設定する。
+  - WASM 初期化失敗時に UI でエラーを表示する。
   - import 付きソースを扱う場合は `modules` の解決を WASM 側で行う設計が
     必要（現状は対象外）。
-  - `wasm-bindgen` のグルーコードを Vite ビルドに接続する。
 - 長所: サーバー不要。完全にブラウザ内で完結。
 - 短所: 提供できる機能が限定的。ビルド工程が増える。WASM の配布サイズ
   （現状約 1.1 MB）を許容する必要がある。
@@ -197,13 +213,13 @@ Tauri 版は全フィールドが `true` のため、現行 UI は変化しま�
 
 | 機能 | A: Tauri IPC | B: ローカル HTTP | C: ブラウザ WASM |
 | --- | --- | --- | --- |
-| 構文検査 (`check`) | ○ | ○ | △ (要 lib API) |
-| import 解決 (`modules`) | ○ | ○ | △ (要 lib API) |
-| 観測バンドル (`observe`, SSA/LIR…) | ○ | ○ | △ (要 lib API、native SSA は不可) |
-| 実行 (`execute`, IR/MIR/SSA/VM) | ○ | ○ | △ (VM のみ等の制限) |
+| 構文検査 (`check`) | ○ | ○ | ○ |
+| import 解決 (`modules`) | ○ | ○ | × |
+| 観測バンドル (`observe`, SSA/LIR…) | ○ | ○ | △ (IR / bytecode / WAT のみ) |
+| 実行 (`execute`, IR/MIR/SSA/VM) | ○ | ○ | △ (IR / MIR / VM のみ) |
 | 比較 (`compare`, clang/qbe/llvm) | ○ | ○ | × (ネイティブ前提) |
 | オブジェクト生成 | ○ | ○ | × (ネイティブ前提) |
-| スナップショット | ○ | ○ | ○ (ブラウザ保存に置換可) |
+| スナップショット | ○ | ○ | × (現状は未対応) |
 | ファイル入出力 | ○ (ネイティブ) | ○ (ブラウザ API) | ○ (ブラウザ API) |
 
 凡例: ○=提供可 / △=条件付き / ×=提供不可。
@@ -213,7 +229,8 @@ Tauri 版は全フィールドが `true` のため、現行 UI は変化しま�
 - **Cerune は変更しない。** 必要な変更は Cerune 側の issue として提案する。
 - 観測バンドルの統一形式は Cerune issue **#60** が既に追跡しているため、
   重複 issue を作成しない。
-- WASM 版は Cerune のライブラリ API 公開が前提。Tint だけでは完結しない。
+- WASM 版は `cerune-lang` の公開ライブラリ API を利用する（確認済み）。
+  Cerune 側の変更は不要。
 - ファイル入出力はホストごとに API が異なる（ネイティブ vs ブラウザ）。
 - 既存 UI と挙動を維持する。機能差は「無効化」でのみ表現する。
 
