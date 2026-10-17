@@ -82,13 +82,25 @@
 
 ### B. ローカル HTTP サーバー
 
-- 概要: Rust 側（または `cerune` をラップした小さなサーバー）を
-  HTTP で公開し、ブラウザから `fetch` する。デスクトップ版とほぼ同じ
-  ロジックをヘッドレスで再利用できる。
-- 必要作業:
-  - Rust 側に HTTP ハンドラを追加（既存の `cerune_cli` をそのまま呼ぶ）。
-  - フロントエンドに `createHttpBackend()` を追加。
-  - `TintHost` はブラウザ API（File System Access API 等）で実装。
+- 概要: Rust 側の小さな HTTP サーバー（`tint-server` クレート）が
+  `core` の観測ロジックをそのまま呼び、ブラウザから `fetch` する。
+  デスクトップ版とほぼ同じロジックをヘッドレスで再利用できる。
+- 実装状況: サーバー本体と `createHttpBackend()` は実装済み。Tauri からの
+  自動起動とブラウザ用 `TintHost` は未着手。
+- エンドポイント（全経路で `Authorization: Bearer <token>` が必要。
+  `GET /health` のみ公開）:
+
+  | メソッド / パス | 役割 |
+  | --- | --- |
+  | `GET /health` | 死活確認 |
+  | `GET /capabilities` | 機能フラグ |
+  | `POST /check` / `POST /observe` | 解析・観測 |
+  | `POST /execute` / `POST /compare` | 実行・比較 |
+  | `POST /modules` / `POST /diff` / `POST /rename` | モジュール・差分・改名 |
+  | `GET`・`POST /snapshots`, `GET`・`DELETE /snapshots/:id` | 履歴 |
+
+- 待ち受け: `127.0.0.1` のみ。トークンは環境変数 `TINT_SERVER_TOKEN`、
+  ポートは `TINT_SERVER_PORT`（既定は自動割り当て）。
 - 長所: ブラウザ UI をほぼ無改修で再利用可能。ネイティブ機能も維持。
 - 短所: ローカルにサーバーを起動する必要がある。オリジン/ポートの
   取り扱い、プロセス管理が必要。
@@ -200,7 +212,8 @@ Tauri 版は全フィールドが `true` のため、現行 UI は変化しま�
 | フェーズ | 内容 | 状態 |
 | --- | --- | --- |
 | 0 | フロントエンドのバックエンド抽象化 (`TintBackend`/`TintHost`) | 完了 |
-| 1 | 方式 B: Rust に HTTP ハンドラを追加し `createHttpBackend()` を実装 | 未着手 |
+| 1 | 方式 B: 共有 `core` 切り出し・`tint-server`・`createHttpBackend()` | 一部完了 |
+| 1.5 | 方式 B: Tauri からのサーバー自動起動とライフサイクル管理 | 未着手 |
 | 2 | 方式 B: ブラウザ用 `TintHost` と Web ビルド手順を追加 | 未着手 |
 | 3 | 方式 C: Cerune の lib API 状況を調査し、WASM ラッパを試作 | 未着手 |
 | 4 | 方式 C: `createWasmBackend()` と機能制限の検証 | 未着手 |
@@ -211,7 +224,15 @@ Tauri 版は全フィールドが `true` のため、現行 UI は変化しま�
 
 ## 10. 現時点の実装状況
 
-- 完了: フェーズ 0（フロントエンドの抽象化）。デスクトップ版の挙動は
-  従来どおり。
-- 未実装: 方式 B（ローカル HTTP）および方式 C（ブラウザ WASM）は
-  **未実装**。本ドキュメントはその設計提案です。
+- 完了:
+  - フェーズ 0（フロントエンドの抽象化）。デスクトップ版の挙動は従来どおり。
+  - 共有 `core` クレート（`tint-core`）の切り出し。`cerune_cli` / `interface`
+    / `history` / `source` を集約し、`src-tauri` と `tint-server` から利用。
+  - `tint-server`（方式 B）: 全 API を提供。`127.0.0.1` 限定・
+    `Bearer` トークン認証。`tint-core` の 21 単体 + 6 統合テスト、
+    `tint-server` の 5 単体 + 6 HTTP 統合テストで検証。
+  - `src/backend-http.ts` の `createHttpBackend()`。
+- 未実装:
+  - Tauri からの `tint-server` 自動起動（プロセス管理）。
+  - ブラウザ用 `TintHost` と Web ビルド（フェーズ 2）。
+  - 方式 C（ブラウザ WASM）。Cerune のライブラリ API が前提。

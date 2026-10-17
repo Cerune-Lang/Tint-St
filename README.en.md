@@ -254,13 +254,22 @@ Build the application.
 npm run tauri build
 ```
 
-To check only the Rust side, run the following from `src-tauri`.
+The Rust side is a Cargo workspace. Run checks from the repository root.
 
 ```sh
-cd src-tauri
-cargo fmt
 cargo check
 ```
+
+Shared logic (Cerune CLI integration, history, interfaces) lives in the `core`
+crate and is used by both the desktop app (`src-tauri`) and the local HTTP
+server (`tint-server`).
+
+```sh
+cargo run -p tint-server   # start the Playground API on 127.0.0.1
+```
+
+`tint-server` accepts `TINT_SERVER_TOKEN` for the token and `TINT_SERVER_PORT`
+for the port (by default it picks a random port and prints a generated token).
 
 ### Testing
 
@@ -270,12 +279,13 @@ Frontend (TypeScript) unit tests run with `tsx` and Node's built-in test runner.
 npm test
 ```
 
-The Rust side separates unit tests that never spawn external commands from integration tests that invoke the real `cerune`.
+The Rust side separates unit tests that never spawn external commands from integration tests that invoke the real `cerune`. Run them from the repository root.
 
 ```sh
-cd src-tauri
-cargo test --lib                          # unit tests (no external commands)
-cargo test --test cerune_cli_integration  # integration tests (requires cerune)
+cargo test                                            # all crates
+cargo test -p tint-core --lib                         # unit tests (no external commands)
+cargo test -p tint-core --test cerune_cli_integration # integration tests (requires cerune)
+cargo test -p tint-server                             # HTTP layer (real socket, no cerune)
 ```
 
 Integration tests are skipped when `cerune` is not on `PATH`. When `clang` or `wsl qbe` is missing, `observe` reports the corresponding assembly as "unavailable".

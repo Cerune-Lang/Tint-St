@@ -267,13 +267,22 @@ npm run tauri dev
 npm run tauri build
 ```
 
-Rust 側だけ確認する場合は `src-tauri` で実行します。
+Rust 側は Cargo ワークスペースです。リポジトリ直下で確認します。
 
 ```sh
-cd src-tauri
-cargo fmt
 cargo check
 ```
+
+共有ロジック（Cerune CLI 連携・履歴・インターフェース）は `core` クレートにあり、
+デスクトップ版（`src-tauri`）とローカル HTTP サーバー（`tint-server`）の双方から
+利用します。
+
+```sh
+cargo run -p tint-server   # 127.0.0.1 で Playground 用 API を起動
+```
+
+`tint-server` は `TINT_SERVER_TOKEN` でトークン、`TINT_SERVER_PORT` でポートを
+指定できます（既定ではランダムポートと自動生成トークンを標準出力に表示）。
 
 ### テスト
 
@@ -283,12 +292,13 @@ cargo check
 npm test
 ```
 
-Rust 側は、外部コマンドを使わない単体テストと、実際の `cerune` を呼び出す統合テストを分けています。
+Rust 側は、外部コマンドを使わない単体テストと、実際の `cerune` を呼び出す統合テストを分けています。リポジトリ直下で実行します。
 
 ```sh
-cd src-tauri
-cargo test --lib                          # 単体テスト（外部コマンドなし）
-cargo test --test cerune_cli_integration  # 統合テスト（要 cerune）
+cargo test                                            # 全クレート
+cargo test -p tint-core --lib                         # 単体テスト（外部コマンドなし）
+cargo test -p tint-core --test cerune_cli_integration # 統合テスト（要 cerune）
+cargo test -p tint-server                             # HTTP 層（ソケットあり・cerune 不要）
 ```
 
 統合テストは `cerune` が見つからない環境ではスキップします。`observe` は `clang` や `wsl qbe` が無い場合、該当する ASM を「unavailable」として扱います。
