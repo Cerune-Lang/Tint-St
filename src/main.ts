@@ -64,7 +64,15 @@ type OutputKind =
   | "irOutput"
   | "mirOutput"
   | "ssaOutput"
-  | "vmOutput";
+  | "vmOutput"
+  | "cmpLir"
+  | "cmpDirectAsm"
+  | "cmpObject"
+  | "cmpLlvm"
+  | "cmpLlvmAsm"
+  | "cmpQbe"
+  | "cmpQbeAsm"
+  | "cmpCAsm";
 
 interface ObservationResult {
   sources: string;
@@ -132,6 +140,15 @@ const outputs: Record<
   mirOutput: "",
   ssaOutput: "",
   vmOutput: "",
+
+  cmpLir: "",
+  cmpDirectAsm: "",
+  cmpObject: "",
+  cmpLlvm: "",
+  cmpLlvmAsm: "",
+  cmpQbe: "",
+  cmpQbeAsm: "",
+  cmpCAsm: "",
 };
 
 const initialSource = `integer: i64 = 1 + 2;
@@ -234,6 +251,39 @@ function executionPathForOutput(
 
     case "vmOutput":
       return "vm";
+
+    default:
+      return null;
+  }
+}
+
+function compareKindForOutput(
+  kind: OutputKind,
+): string | null {
+  switch (kind) {
+    case "cmpLir":
+      return "lir";
+
+    case "cmpDirectAsm":
+      return "directAsm";
+
+    case "cmpObject":
+      return "object";
+
+    case "cmpLlvm":
+      return "llvm";
+
+    case "cmpLlvmAsm":
+      return "llvmAsm";
+
+    case "cmpQbe":
+      return "qbe";
+
+    case "cmpQbeAsm":
+      return "qbeAsm";
+
+    case "cmpCAsm":
+      return "cAsm";
 
     default:
       return null;
@@ -733,6 +783,11 @@ async function runExecution() {
 }
 
 async function emit() {
+  if (activeGroup === "compare") {
+    await runCompare();
+    return;
+  }
+
   const button =
     document.querySelector<HTMLButtonElement>(
       "#emit-button",
@@ -777,6 +832,71 @@ async function emit() {
 
     setStatus(
       "Cerune error",
+      "error",
+    );
+  } finally {
+    if (button) {
+      button.disabled = false;
+    }
+  }
+}
+
+async function runCompare() {
+  const kind =
+    compareKindForOutput(activeOutput);
+
+  if (!kind) {
+    setStatus(
+      "Comparison target is not selected",
+      "error",
+    );
+    return;
+  }
+
+  const button =
+    document.querySelector<HTMLButtonElement>(
+      "#emit-button",
+    );
+
+  if (button) {
+    button.disabled = true;
+  }
+
+  setStatus(
+    "Comparing x64 targets…",
+    "working",
+  );
+
+  try {
+    const diff =
+      await invoke<string>(
+        "compare_targets",
+        {
+          source: sourceText(),
+          sourcePath: currentPath,
+          kind,
+          annotateOrigins: annotateOrigins(),
+          nativeSsa: nativeSsa(),
+          stringHeapLimit: heapLimit(
+            "#string-heap-limit",
+          ),
+          arrayHeapLimit: heapLimit(
+            "#array-heap-limit",
+          ),
+        },
+      );
+
+    outputs[activeOutput] = diff;
+
+    showOutput(activeOutput);
+
+    setStatus("Ready");
+  } catch (error) {
+    outputElement().textContent =
+      String(error);
+
+    setStatus(
+      "Comparison error",
       "error",
     );
   } finally {

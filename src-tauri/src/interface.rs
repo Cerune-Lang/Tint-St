@@ -141,6 +141,45 @@ pub struct ExecuteRequest {
     pub array_heap_limit: Option<u64>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompareKind {
+    Lir,
+    DirectAsm,
+    Object,
+    Llvm,
+    LlvmAsm,
+    Qbe,
+    QbeAsm,
+    CAsm,
+}
+
+impl CompareKind {
+    pub fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "lir" => Ok(Self::Lir),
+            "directAsm" => Ok(Self::DirectAsm),
+            "object" => Ok(Self::Object),
+            "llvm" => Ok(Self::Llvm),
+            "llvmAsm" => Ok(Self::LlvmAsm),
+            "qbe" => Ok(Self::Qbe),
+            "qbeAsm" => Ok(Self::QbeAsm),
+            "cAsm" => Ok(Self::CAsm),
+
+            _ => Err(format!("unsupported comparison kind: {value}")),
+        }
+    }
+}
+
+pub struct CompareRequest {
+    pub source: String,
+    pub source_path: Option<String>,
+    pub kind: CompareKind,
+    pub annotate_origins: bool,
+    pub native_ssa: bool,
+    pub string_heap_limit: Option<u64>,
+    pub array_heap_limit: Option<u64>,
+}
+
 #[derive(Serialize)]
 pub struct ExecutionResult {
     pub output: String,

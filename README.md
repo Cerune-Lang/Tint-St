@@ -382,6 +382,26 @@ Tint* は複数の実行経路を Emit 時に自動実行しません。
 
 これにより、観測のためのコード生成と、実際にプログラムを動かす操作を分離しています。
 
+### Compare
+
+Compare では、同じソースを **Windows x64**（`x86_64-pc-windows-msvc`）と **Linux x86-64**（`x86_64-unknown-linux-gnu`）の両ターゲットで生成し、行差分を表示します。
+
+```text
+source
+  ├─ Windows x64  → artifact (A)
+  └─ Linux x86-64 → artifact (B)
+                     ↓
+                unified diff
+```
+
+比較対象はターゲット依存の生成物です。
+
+```text
+LIR / ASM / Object / LLVM IR / LLVM ASM / QBE IR / QBE ASM / C ASM
+```
+
+差分は行単位で `-`（Windows のみ）と `+`（Linux のみ）を示し、一致する行は前後関係のために残します。両ターゲットが同一の場合は `No differences` と表示します。
+
 ## 設計
 
 Tint* は意図的に小さく作られています。

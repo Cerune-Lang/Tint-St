@@ -2,8 +2,8 @@ mod cerune_cli;
 mod interface;
 
 use interface::{
-    ExecuteRequest, ExecutionPath, ExecutionResult, Observation, ObserveRequest, Target,
-    parse_heap_limit,
+    CompareKind, CompareRequest, ExecuteRequest, ExecutionPath, ExecutionResult, Observation,
+    ObserveRequest, Target, parse_heap_limit,
 };
 
 #[tauri::command]
@@ -84,13 +84,41 @@ fn execute(
     cerune_cli::execute(request)
 }
 
+#[tauri::command]
+fn compare_targets(
+    source: String,
+    source_path: Option<String>,
+    kind: String,
+    annotate_origins: bool,
+    native_ssa: bool,
+    string_heap_limit: Option<String>,
+    array_heap_limit: Option<String>,
+) -> Result<String, String> {
+    let request = CompareRequest {
+        source,
+        source_path,
+        kind: CompareKind::parse(&kind)?,
+        annotate_origins,
+        native_ssa,
+        string_heap_limit: parse_heap_limit(string_heap_limit, "--string-heap-limit")?,
+        array_heap_limit: parse_heap_limit(array_heap_limit, "--array-heap-limit")?,
+    };
+
+    cerune_cli::compare(request)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![emit_all, execute, rename_source,])
+        .invoke_handler(tauri::generate_handler![
+            emit_all,
+            execute,
+            compare_targets,
+            rename_source,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Tint");
 }
