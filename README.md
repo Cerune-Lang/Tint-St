@@ -402,6 +402,23 @@ LIR / ASM / Object / LLVM IR / LLVM ASM / QBE IR / QBE ASM / C ASM
 
 差分は行単位で `-`（Windows のみ）と `+`（Linux のみ）を示し、一致する行は前後関係のために残します。両ターゲットが同一の場合は `No differences` と表示します。
 
+### History
+
+`Snapshot` を押すと、その時点の出力一式をスナップショットとして保存します。
+
+```text
+outputs
+  ↓
+Snapshot
+  ↓
+%LOCALAPPDATA%\Tint\history (Windows)
+~/.tint/history          (Linux)
+```
+
+`History…` から保存済みのスナップショットを選ぶと、現在の出力とスナップショットの差分を、いま選択中の出力について表示します。
+
+差分は `-`（スナップショットにのみ存在）と `+`（現在にのみ存在）で示します。履歴は最大 20 件で、古いものから自動的に削除されます。`Delete` で選択中のスナップショットを削除できます。
+
 ## 設計
 
 Tint* は意図的に小さく作られています。

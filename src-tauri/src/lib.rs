@@ -1,4 +1,5 @@
 mod cerune_cli;
+mod history;
 mod interface;
 
 use interface::{
@@ -107,6 +108,31 @@ fn compare_targets(
     cerune_cli::compare(request)
 }
 
+#[tauri::command]
+fn save_snapshot(snapshot: history::Snapshot) -> Result<history::SnapshotMeta, String> {
+    history::save(snapshot)
+}
+
+#[tauri::command]
+fn list_snapshots() -> Result<Vec<history::SnapshotMeta>, String> {
+    history::list()
+}
+
+#[tauri::command]
+fn read_snapshot(id: String) -> Result<history::Snapshot, String> {
+    history::read(&id)
+}
+
+#[tauri::command]
+fn delete_snapshot(id: String) -> Result<(), String> {
+    history::delete(&id)
+}
+
+#[tauri::command]
+fn diff_text(left: String, right: String, left_label: String, right_label: String) -> String {
+    cerune_cli::diff_lines(&left, &right, &left_label, &right_label)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -117,6 +143,11 @@ pub fn run() {
             emit_all,
             execute,
             compare_targets,
+            save_snapshot,
+            list_snapshots,
+            read_snapshot,
+            delete_snapshot,
+            diff_text,
             rename_source,
         ])
         .run(tauri::generate_context!())

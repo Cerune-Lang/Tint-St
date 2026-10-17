@@ -104,6 +104,22 @@ interface ObservationResult {
   bytecode: string;
 }
 
+interface SnapshotMeta {
+  id: string;
+  createdAt: number;
+  label: string;
+  target: string;
+}
+
+interface Snapshot {
+  id: string;
+  createdAt: number;
+  label: string;
+  target: string;
+  source: string;
+  outputs: Record<string, string>;
+}
+
 const outputs: Record<
   OutputKind,
   string
@@ -906,6 +922,224 @@ async function runCompare() {
   }
 }
 
+function outputLabelForKind(
+  kind: OutputKind,
+): string {
+  const button =
+    document.querySelector<HTMLButtonElement>(
+      `.tab[data-output="${kind}"]`,
+    );
+
+  return button?.textContent?.trim() || kind;
+}
+
+function selectedSnapshotId(): string {
+  const element =
+    document.querySelector<HTMLSelectElement>(
+      "#snapshot-select",
+    );
+
+  return element?.value ?? "";
+}
+
+function updateSnapshotActions() {
+  const button =
+    document.querySelector<HTMLButtonElement>(
+      "#snapshot-delete-button",
+    );
+
+  if (button) {
+    button.disabled =
+      selectedSnapshotId() === "";
+  }
+}
+
+async function refreshSnapshots() {
+  const select =
+    document.querySelector<HTMLSelectElement>(
+      "#snapshot-select",
+    );
+
+  if (!select) {
+    return;
+  }
+
+  const previous = select.value;
+
+  let metas: SnapshotMeta[] = [];
+
+  try {
+    metas =
+      await invoke<SnapshotMeta[]>(
+        "list_snapshots",
+      );
+  } catch {
+    metas = [];
+  }
+
+  select.innerHTML = "";
+
+  const placeholder =
+    document.createElement("option");
+
+  placeholder.value = "";
+  placeholder.textContent = "History…";
+
+  select.append(placeholder);
+
+  for (const meta of metas) {
+    const option =
+      document.createElement("option");
+
+    option.value = meta.id;
+
+    option.textContent =
+      `${meta.label} · ${new Date(
+        meta.createdAt,
+      ).toLocaleTimeString()}`;
+
+    select.append(option);
+  }
+
+  if (
+    metas.some(
+      (meta) => meta.id === previous,
+    )
+  ) {
+    select.value = previous;
+  }
+
+  updateSnapshotActions();
+}
+
+async function saveSnapshot() {
+  const target = selectedTarget();
+
+  const targetElement =
+    document.querySelector<HTMLSelectElement>(
+      "#target-select",
+    );
+
+  const label =
+    targetElement?.selectedOptions[0]
+      ?.textContent?.trim() || target;
+
+  const snapshotOutputs: Record<
+    string,
+    string
+  > = {};
+
+  for (const [key, value] of Object.entries(
+    outputs,
+  )) {
+    if (value) {
+      snapshotOutputs[key] = value;
+    }
+  }
+
+  if (
+    Object.keys(snapshotOutputs).length === 0
+  ) {
+    setStatus(
+      "Nothing to snapshot",
+      "error",
+    );
+    return;
+  }
+
+  try {
+    await invoke("save_snapshot", {
+      snapshot: {
+        label,
+        target,
+        source: sourceText(),
+        outputs: snapshotOutputs,
+      },
+    });
+
+    await refreshSnapshots();
+
+    setStatus("Snapshot saved");
+  } catch (error) {
+    setStatus(
+      `Snapshot error: ${String(error)}`,
+      "error",
+    );
+  }
+}
+
+async function showSnapshotDiff(id: string) {
+  if (!id) {
+    return;
+  }
+
+  try {
+    const snapshot =
+      await invoke<Snapshot>(
+        "read_snapshot",
+        { id },
+      );
+
+    const label = outputLabelForKind(
+      activeOutput,
+    );
+
+    const diff = await invoke<string>(
+      "diff_text",
+      {
+        left:
+          snapshot.outputs[activeOutput] ??
+          "",
+        right: outputs[activeOutput],
+        leftLabel: `snapshot (${snapshot.label})`,
+        rightLabel: "current",
+      },
+    );
+
+    outputElement().textContent =
+      `# ${label}\n${diff}`;
+
+    setStatus(
+      `Diffing ${label} against snapshot`,
+    );
+  } catch (error) {
+    outputElement().textContent =
+      String(error);
+
+    setStatus("Snapshot error", "error");
+  }
+}
+
+async function deleteSelectedSnapshot() {
+  const id = selectedSnapshotId();
+
+  if (!id) {
+    return;
+  }
+
+  try {
+    await invoke("delete_snapshot", { id });
+
+    const select =
+      document.querySelector<HTMLSelectElement>(
+        "#snapshot-select",
+      );
+
+    if (select) {
+      select.value = "";
+    }
+
+    await refreshSnapshots();
+
+    setStatus("Snapshot deleted");
+  } catch (error) {
+    setStatus(
+      `Snapshot error: ${String(error)}`,
+      "error",
+    );
+  }
+}
+
 async function saveAsFile() {
   const path = await save({
     defaultPath:
@@ -1185,6 +1419,43 @@ window.addEventListener(
       );
 
     document
+      .querySelector("#snapshot-button")
+      ?.addEventListener(
+        "click",
+        () => {
+          void saveSnapshot();
+        },
+      );
+
+    document
+      .querySelector("#snapshot-select")
+      ?.addEventListener(
+        "change",
+        (event) => {
+          updateSnapshotActions();
+
+          const value = (
+            event.target as HTMLSelectElement
+          ).value;
+
+          if (value) {
+            void showSnapshotDiff(value);
+          }
+        },
+      );
+
+    document
+      .querySelector(
+        "#snapshot-delete-button",
+      )
+      ?.addEventListener(
+        "click",
+        () => {
+          void deleteSelectedSnapshot();
+        },
+      );
+
+    document
       .querySelectorAll<HTMLButtonElement>(
         ".tab",
       )
@@ -1243,5 +1514,7 @@ showGroup("pipeline");
     applySettings(readSettings());
 
     bindSettingsPersistence();
+
+    void refreshSnapshots();
   },
 );

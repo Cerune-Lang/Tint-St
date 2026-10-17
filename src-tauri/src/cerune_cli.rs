@@ -336,7 +336,7 @@ fn target_artifact(
     }
 }
 
-fn diff_lines(left: &str, right: &str, left_label: &str, right_label: &str) -> String {
+pub fn diff_lines(left: &str, right: &str, left_label: &str, right_label: &str) -> String {
     let mut output = String::new();
 
     if left == right {
