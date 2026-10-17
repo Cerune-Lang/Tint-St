@@ -182,7 +182,7 @@ Tint* uses the Cerune CLI for validation, code generation, and execution.
 First, install Cerune.
 
 ```sh
-git clone https://github.com/Hokutaka/Cerune.git
+git clone https://github.com/Cerune-Lang/Cerune.git
 cd Cerune
 cargo install --path .
 ```

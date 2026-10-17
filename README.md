@@ -2,7 +2,7 @@
 
 # Tint*
 
-Tint* は [Cerune](https://github.com/Hokutaka/Cerune) のコード生成過程と実行経路を観測するための、小さなビジュアル環境です。
+Tint* は [Cerune](https://github.com/Cerune-Lang/Cerune) のコード生成過程と実行経路を観測するための、小さなビジュアル環境です。
 
 Cerune のコードを書く。生成する。眺める。
 
@@ -195,7 +195,7 @@ Tint* は、コードの検証・生成・実行に Cerune CLI を使用しま�
 まず Cerune をインストールします。
 
 ```sh
-git clone https://github.com/Hokutaka/Cerune.git
+git clone https://github.com/Cerune-Lang/Cerune.git
 cd Cerune
 cargo install --path .
 ```
@@ -524,13 +524,9 @@ import グラフ
 ## 設計
 
 Tint* は意図的に小さく作られています。
-
 汎用的なフル機能 IDE を目指すものではありません。
-
 Tint* は、書くための IDE ではなく、コンパイラ内部を歩くための観測 UI です。
-
 Cerune を書き、同じソースコードが異なる表現・バックエンド・実行経路へどう変わっていくのかを眺めることに焦点を当てています。
-
 インターフェースが注目するものは基本的に、
 
 ```text
@@ -540,15 +536,10 @@ source | representation / output
 です。
 
 Observation と Execution は意図的に分離されています。
-
 Observation は各表現や生成物を取得しますが、プログラムを実行しません。
-
 Execution はユーザーが選択したひとつの実行経路だけを明示的に動かします。
-
 Cerune は、言語、意味解析、IR、MIR、SSA、各バックエンド、Bytecode、VM、Provenance を担当します。
-
 Clang や QBE などの外部ツールは、それぞれの追加変換を担当します。
-
 Tint* は、それらを横断して観測するための窓です。
 
 ## 名前
