@@ -112,6 +112,20 @@ pub struct Observation {
     pub bytecode: String,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Diagnostic {
+    pub line: u32,
+    pub column: u32,
+    pub message: String,
+    pub severity: String,
+}
+
+pub struct CheckRequest {
+    pub source: String,
+    pub source_path: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExecutionPath {
     Ir,

@@ -491,6 +491,19 @@ button {
   background: #e58a8a;
 }
 
+.diagnostic-count {
+  color: #9ab0bf;
+}
+
+.diagnostic-count[data-state="ok"] {
+  color: #75a98c;
+}
+
+.diagnostic-count[data-state="error"] {
+  color: #d06f6f;
+  font-weight: 600;
+}
+
 .shortcut {
   color: #9ab0bf;
 }

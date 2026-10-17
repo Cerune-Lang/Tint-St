@@ -419,6 +419,22 @@ Snapshot
 
 差分は `-`（スナップショットにのみ存在）と `+`（現在にのみ存在）で示します。履歴は最大 20 件で、古いものから自動的に削除されます。`Delete` で選択中のスナップショットを削除できます。
 
+### 診断
+
+ソースを編集すると、入力を一定時間デバウンスして `cerune check` を実行し、結果を行の下線・ガター・ステータスバー（問題数）に反映します。
+
+```text
+edit
+  ↓ (debounce 500ms)
+cerune check
+  ↓
+cerune: <message> at <line>:<column>
+  ↓
+inline marker + gutter + status
+```
+
+`cerune check` のエラーは標準エラーへ `cerune: <message> at <line>:<column>` の形式で出力されるため、Tint* はこれを解析して該当位置へマーカーを付けます。診断は観測（Emit）とは独立して常時実行されます。
+
 ## 設計
 
 Tint* は意図的に小さく作られています。

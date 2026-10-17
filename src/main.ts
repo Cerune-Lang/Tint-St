@@ -3,6 +3,11 @@ import {
 } from "@codemirror/view";
 
 import {
+  lintGutter,
+  linter,
+} from "@codemirror/lint";
+
+import {
   minimalSetup,
 } from "codemirror";
 
@@ -118,6 +123,13 @@ interface Snapshot {
   target: string;
   source: string;
   outputs: Record<string, string>;
+}
+
+interface Diagnostic {
+  line: number;
+  column: number;
+  message: string;
+  severity: string;
 }
 
 const outputs: Record<
@@ -250,6 +262,38 @@ function setStatus(
   if (statusDot) {
     statusDot.dataset.state = state;
   }
+}
+
+function setDiagnosticStatus(
+  count: number | null,
+) {
+  const element =
+    document.querySelector<HTMLElement>(
+      "#diagnostic-count",
+    );
+
+  if (!element) {
+    return;
+  }
+
+  if (count === null) {
+    element.textContent = "";
+    element.dataset.state = "unknown";
+    return;
+  }
+
+  if (count === 0) {
+    element.textContent = "No problems";
+    element.dataset.state = "ok";
+    return;
+  }
+
+  element.textContent =
+    count === 1
+      ? "1 problem"
+      : `${count} problems`;
+
+  element.dataset.state = "error";
 }
 
 function executionPathForOutput(
@@ -1213,6 +1257,60 @@ async function updateFileName(
     .setTitle(`Tint* — ${name}`);
 }
 
+const ceruneLinter = linter(
+  async (view) => {
+    const source =
+      view.state.doc.toString();
+
+    let diagnostics: Diagnostic[] = [];
+
+    try {
+      diagnostics =
+        await invoke<Diagnostic[]>(
+          "check_source",
+          {
+            source,
+            sourcePath: currentPath,
+          },
+        );
+    } catch {
+      setDiagnosticStatus(null);
+      return [];
+    }
+
+    setDiagnosticStatus(diagnostics.length);
+
+    return diagnostics.map((diagnostic) => {
+      const lineNumber = Math.min(
+        Math.max(diagnostic.line, 1),
+        view.state.doc.lines,
+      );
+
+      const line =
+        view.state.doc.line(lineNumber);
+
+      const position = Math.min(
+        line.from +
+          Math.max(diagnostic.column - 1, 0),
+        line.to,
+      );
+
+      const to = Math.min(
+        position + 1,
+        line.to,
+      );
+
+      return {
+        from: position,
+        to: Math.max(to, position),
+        severity: "error" as const,
+        message: diagnostic.message,
+      };
+    });
+  },
+  { delay: 500 },
+);
+
 const editorTheme =
   EditorView.theme({
     "&": {
@@ -1333,6 +1431,8 @@ window.addEventListener(
         minimalSetup,
         ceruneLanguage,
         ceruneHighlighting,
+        ceruneLinter,
+        lintGutter(),
         editorTheme,
       ]
     });

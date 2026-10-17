@@ -3,8 +3,8 @@ mod history;
 mod interface;
 
 use interface::{
-    CompareKind, CompareRequest, ExecuteRequest, ExecutionPath, ExecutionResult, Observation,
-    ObserveRequest, Target, parse_heap_limit,
+    CheckRequest, CompareKind, CompareRequest, Diagnostic, ExecuteRequest, ExecutionPath,
+    ExecutionResult, Observation, ObserveRequest, Target, parse_heap_limit,
 };
 
 #[tauri::command]
@@ -133,6 +133,19 @@ fn diff_text(left: String, right: String, left_label: String, right_label: Strin
     cerune_cli::diff_lines(&left, &right, &left_label, &right_label)
 }
 
+#[tauri::command]
+fn check_source(
+    source: String,
+    source_path: Option<String>,
+) -> Result<Vec<Diagnostic>, String> {
+    let request = CheckRequest {
+        source,
+        source_path,
+    };
+
+    cerune_cli::check_diagnostics(request)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -148,6 +161,7 @@ pub fn run() {
             read_snapshot,
             delete_snapshot,
             diff_text,
+            check_source,
             rename_source,
         ])
         .run(tauri::generate_context!())
