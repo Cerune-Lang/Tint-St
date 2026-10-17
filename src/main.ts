@@ -23,9 +23,16 @@ import {
 
 import { createHttpBackend } from "./backend-http";
 
+import { createDeferredWasmBackend } from "./backend-wasm";
+
 import { createWebHost } from "./host-web";
 
-import { detectEnvironment } from "./environment";
+import { loadWasmModule } from "./wasm-loader";
+
+import {
+  detectEnvironment,
+  isTauriRuntime,
+} from "./environment";
 
 import type {
   BackendCapabilities,
@@ -73,6 +80,7 @@ import type {
 
 const environment = detectEnvironment(
   window.location.search,
+  isTauriRuntime(),
 );
 
 const backend: TintBackend =
@@ -81,12 +89,16 @@ const backend: TintBackend =
         baseUrl: environment.serverUrl,
         token: environment.token,
       })
-    : createTauriBackend();
+    : environment.kind === "wasm"
+      ? createDeferredWasmBackend(() =>
+          loadWasmModule(document.baseURI),
+        )
+      : createTauriBackend();
 
 const host: TintHost =
-  environment.kind === "http"
-    ? createWebHost()
-    : createTauriHost();
+  environment.kind === "tauri"
+    ? createTauriHost()
+    : createWebHost();
 
 const outputs: Record<
   OutputKind,
@@ -1977,13 +1989,41 @@ function applyCapabilities(
   }
 }
 
+const ALL_DISABLED: BackendCapabilities = {
+  check: false,
+  observe: false,
+  execute: false,
+  compare: false,
+  modules: false,
+  snapshots: false,
+  rename: false,
+};
+
+function showWasmError(error: unknown) {
+  setStatus("WASM init error", "error");
+
+  outputElement().textContent =
+    "WASM 版 Cerune の読み込みに失敗しました。\n" +
+    `${String(error)}\n\n` +
+    "ローカルでは `npm run build:wasm` で生成できます。";
+}
+
 async function initCapabilities() {
   try {
     applyCapabilities(
       await backend.capabilities(),
     );
-  } catch {
-    // 機能フラグを取得できない場合は、既定（すべて有効）を維持します。
+  } catch (error) {
+    // WASM 版で初期化に失敗した場合は、未対応機能を有効に見せないよう
+    // すべて無効化し、原因を表示します。
+    if (environment.kind === "wasm") {
+      applyCapabilities(ALL_DISABLED);
+      showWasmError(error);
+      return;
+    }
+
+    // その他の環境では、機能フラグを取得できない場合に
+    // 既定（すべて有効）を維持します。
   }
 }
 

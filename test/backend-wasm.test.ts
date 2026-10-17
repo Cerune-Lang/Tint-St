@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  createDeferredWasmBackend,
   createWasmBackend,
   type WasmModule,
 } from "../src/backend-wasm";
@@ -109,6 +110,38 @@ test("executes through the requested path", async () => {
   });
 
   assert.equal(result.output, "vm:print(1);\n");
+});
+
+test("defers loading the wasm module until the first call", async () => {
+  let loads = 0;
+
+  const backend = createDeferredWasmBackend(async () => {
+    loads += 1;
+    return fakeModule();
+  });
+
+  assert.equal(loads, 0);
+
+  assert.deepEqual(await backend.check("x: i64 = 1;", null), []);
+  await backend.capabilities();
+  await backend.execute({
+    source: "print(1);",
+    sourcePath: null,
+    path: "vm",
+    stringHeapLimit: null,
+    arrayHeapLimit: null,
+  });
+
+  assert.equal(loads, 1);
+});
+
+test("surfaces wasm initialization errors through every method", async () => {
+  const backend = createDeferredWasmBackend(async () => {
+    throw new Error("init failed");
+  });
+
+  await assert.rejects(backend.capabilities(), /init failed/);
+  await assert.rejects(backend.check("x", null), /init failed/);
 });
 
 test("rejects the features the wasm backend cannot provide", async () => {

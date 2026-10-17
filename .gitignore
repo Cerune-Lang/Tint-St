@@ -21,6 +21,9 @@ dist-ssr
 /experiments/*/pkg-node/
 /experiments/*/Cargo.lock
 
+# Generated browser WASM placed for the Vite/Pages build
+/public/wasm/
+
 # Editor directories and files
 .vscode/
 .idea

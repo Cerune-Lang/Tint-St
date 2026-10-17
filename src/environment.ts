@@ -3,6 +3,7 @@
  *
  * - `http`: ブラウザからローカル HTTP サーバー（`tint-server`）に接続する。
  * - `tauri`: デスクトップ版（Tauri IPC）として実行する。
+ * - `wasm`: ブラウザ内の WASM 版 Cerune を直接利用する。
  */
 export type EnvironmentKind =
   | {
@@ -12,16 +13,21 @@ export type EnvironmentKind =
     }
   | {
       kind: "tauri";
+    }
+  | {
+      kind: "wasm";
     };
 
 /**
- * URL のクエリ文字列から実行環境を判定します。
+ * URL のクエリ文字列と Tauri 実行の有無から実行環境を判定します。
  *
- * `?server=<url>&token=<token>` が揃っていればブラウザ版、それ以外は
- * デスクトップ版として扱います。純粋関数なのでテストできます。
+ * `?server=<url>&token=<token>` が揃っていればローカル HTTP 版、
+ * そうでなければ Tauri 版（`isTauri` が真）かブラウザ WASM 版を選びます。
+ * 純粋関数なのでテストできます。
  */
 export function detectEnvironment(
   search: string,
+  isTauri: boolean,
 ): EnvironmentKind {
   const params = new URLSearchParams(search);
 
@@ -36,5 +42,20 @@ export function detectEnvironment(
     };
   }
 
-  return { kind: "tauri" };
+  if (isTauri) {
+    return { kind: "tauri" };
+  }
+
+  return { kind: "wasm" };
+}
+
+/**
+ * Tauri ランタイム上で動いているかを判定します。
+ * ブラウザ（Pages など）では `false` になります。
+ */
+export function isTauriRuntime(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    "__TAURI_INTERNALS__" in window
+  );
 }
