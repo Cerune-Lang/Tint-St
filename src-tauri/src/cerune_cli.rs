@@ -48,15 +48,17 @@ pub fn observe(request: ObserveRequest) -> Result<Observation, String> {
         .map_err(|error| format!("failed to create temporary Cerune source: {error}"))?;
 
     let result: Result<Observation, String> = (|| {
-        run_cerune("check", &source_path, &[])?;
-
-        let sources = run_cerune("emit-sources", &source_path, &[])?;
-
-        let ir = run_cerune_with_heap("emit-ir", &source_path, &[], &heap)?;
-
-        let mir = run_cerune_with_heap("emit-mir", &source_path, &[], &heap)?;
-
-        let ssa = run_cerune_with_heap("emit-mir", &source_path, &["--ssa"], &heap)?;
+        let ObserveBundle {
+            sources,
+            ir,
+            mir,
+            ssa,
+            ssa_map,
+            ssa_lowered,
+            ssa_lowered_map,
+            lir,
+            manifest,
+        } = run_cerune_observe(&source_path, target_name, native_ssa, &heap)?;
 
         let c = run_cerune_with_heap("emit-c", &source_path, &[], &heap)?;
 
@@ -84,14 +86,6 @@ pub fn observe(request: ObserveRequest) -> Result<Observation, String> {
         let qbe_asm = run_qbe_asm(&qbe, timestamp, target)
             .unwrap_or_else(|error| format!("QBE ASM unavailable:\n{error}"));
 
-        let mut lir_args = vec!["--target", target_name];
-
-        if native_ssa {
-            lir_args.push("--ssa");
-        }
-
-        let lir = run_cerune_with_heap("emit-lir", &source_path, &lir_args, &heap)?;
-
         let mut asm_args = vec!["--target", target_name];
 
         if native_ssa {
@@ -108,13 +102,6 @@ pub fn observe(request: ObserveRequest) -> Result<Observation, String> {
             run_cerune_object(&source_path, target, annotate_origins, native_ssa, timestamp, &heap)?;
 
         let bytecode = run_cerune_with_heap("emit-bytecode", &source_path, &[], &heap)?;
-
-        let ObserveBundle {
-            ssa_map,
-            ssa_lowered,
-            ssa_lowered_map,
-            manifest,
-        } = run_cerune_observe(&source_path, target_name, &heap)?;
 
         Ok(Observation {
             sources,
@@ -263,15 +250,26 @@ fn run_cerune_with_heap(
 }
 
 struct ObserveBundle {
+    sources: String,
+    ir: String,
+    mir: String,
+    ssa: String,
     ssa_map: String,
     ssa_lowered: String,
     ssa_lowered_map: String,
+    lir: String,
     manifest: String,
+}
+
+fn read_bundle_file(directory: &Path, name: &str, label: &str) -> Result<String, String> {
+    fs::read_to_string(directory.join(name))
+        .map_err(|error| format!("failed to read {label}: {error}"))
 }
 
 fn run_cerune_observe(
     source_path: &Path,
     target: &str,
+    native_ssa: bool,
     heap: &[String],
 ) -> Result<ObserveBundle, String> {
     let timestamp = SystemTime::now()
@@ -288,29 +286,49 @@ fn run_cerune_observe(
 
     let directory_text = directory.to_string_lossy().into_owned();
 
-    let mut args = vec!["--ssa", "--target", target, "-o", directory_text.as_str()];
+    let mut args = vec!["--ssa", "--lir", "--target", target, "-o", directory_text.as_str()];
 
     args.extend(heap.iter().map(String::as_str));
 
     let result = (|| {
         run_cerune("observe", source_path, &args)?;
 
-        let ssa_map = fs::read_to_string(directory.join("program.ssa-map.txt"))
-            .map_err(|error| format!("failed to read SSA mapping: {error}"))?;
+        let sources = read_bundle_file(&directory, "sources.json", "sources manifest")?;
 
-        let ssa_lowered = fs::read_to_string(directory.join("program.ssa-lowered.mir.txt"))
-            .map_err(|error| format!("failed to read SSA-lowered MIR: {error}"))?;
+        let ir = read_bundle_file(&directory, "program.ceir", "Cerune IR")?;
 
-        let ssa_lowered_map = fs::read_to_string(directory.join("program.ssa-lowered-map.txt"))
-            .map_err(|error| format!("failed to read SSA lowering mapping: {error}"))?;
+        let mir = read_bundle_file(&directory, "program.mir.txt", "MIR")?;
 
-        let manifest = fs::read_to_string(directory.join("manifest.json"))
-            .map_err(|error| format!("failed to read observation manifest: {error}"))?;
+        let ssa = read_bundle_file(&directory, "program.ssa.txt", "SSA")?;
+
+        let ssa_map = read_bundle_file(&directory, "program.ssa-map.txt", "SSA mapping")?;
+
+        let ssa_lowered =
+            read_bundle_file(&directory, "program.ssa-lowered.mir.txt", "SSA-lowered MIR")?;
+
+        let ssa_lowered_map = read_bundle_file(
+            &directory,
+            "program.ssa-lowered-map.txt",
+            "SSA lowering mapping",
+        )?;
+
+        let manifest = read_bundle_file(&directory, "manifest.json", "observation manifest")?;
+
+        let lir = if native_ssa {
+            read_bundle_file(&directory, "program.ssa.lir.txt", "SSA LIR")?
+        } else {
+            read_bundle_file(&directory, "program.lir.txt", "LIR")?
+        };
 
         Ok(ObserveBundle {
+            sources,
+            ir,
+            mir,
+            ssa,
             ssa_map,
             ssa_lowered,
             ssa_lowered_map,
+            lir,
             manifest,
         })
     })();

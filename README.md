@@ -288,25 +288,28 @@ Emit すると、一時的な `.ceru` ソースを用意し、コードを実行
 ```text
 Tint*
  │
- ├─ cerune check
- ├─ cerune emit-sources
- ├─ cerune emit-ir
- ├─ cerune emit-mir
- ├─ cerune emit-mir --ssa
- ├─ cerune observe --ssa
+ ├─ cerune observe --ssa --lir
+ │    ├─ Sources
+ │    ├─ Cerune IR
+ │    ├─ MIR
+ │    ├─ SSA
+ │    ├─ SSA Map
+ │    ├─ SSA → MIR
+ │    ├─ SSA → MIR Map
+ │    ├─ Native LIR
+ │    └─ Manifest
  ├─ cerune emit-c
  ├─ cerune emit-llvm
  ├─ cerune emit-wat
  ├─ cerune emit-qbe
- ├─ cerune emit-lir
  ├─ cerune emit-asm
  ├─ cerune emit-obj
  └─ cerune emit-bytecode
 ```
 
-`Native SSA` を有効にすると、Native LIR / ASM / Object は SSA を経由して生成されます。
+Pipeline の各表示は、`cerune observe --ssa --lir` が生成した単一の観測バンドルから取得します。同じ1回のコンパイル結果を共有するため、Sources / IR / MIR / SSA / SSA Map / SSA → MIR / SSA → MIR Map / Native LIR / Manifest が互いに一貫します。`SSA Map` は SSA 構築時の対応、`SSA → MIR` と `SSA → MIR Map` は SSA を MIR へ戻した結果とその対応、`Manifest` は観測スキーマと変換の索引です。
 
-`SSA Map`、`SSA → MIR`、`SSA → MIR Map`、`Manifest` は `cerune observe --ssa` が生成した観測バンドルから取得します。`SSA Map` は SSA 構築時の対応、`SSA → MIR` と `SSA → MIR Map` は SSA を MIR へ戻した結果とその対応、`Manifest` は観測スキーマと変換の索引です。
+`Native SSA` を有効にすると、Native LIR / ASM / Object は SSA を経由して生成されます。
 
 `str heap` / `arr heap` にバイト数を入力すると、`--string-heap-limit` / `--array-heap-limit` として各 Cerune 呼び出しへ渡されます。空欄の場合は Cerune の既定値を使います。
 
