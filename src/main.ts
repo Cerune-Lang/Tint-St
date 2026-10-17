@@ -21,6 +21,12 @@ import {
   createTauriHost,
 } from "./backend-tauri";
 
+import { createHttpBackend } from "./backend-http";
+
+import { createWebHost } from "./host-web";
+
+import { detectEnvironment } from "./environment";
+
 import type {
   BackendCapabilities,
   TintBackend,
@@ -65,9 +71,22 @@ import type {
   Target,
 } from "./types";
 
-const backend: TintBackend = createTauriBackend();
+const environment = detectEnvironment(
+  window.location.search,
+);
 
-const host: TintHost = createTauriHost();
+const backend: TintBackend =
+  environment.kind === "http"
+    ? createHttpBackend({
+        baseUrl: environment.serverUrl,
+        token: environment.token,
+      })
+    : createTauriBackend();
+
+const host: TintHost =
+  environment.kind === "http"
+    ? createWebHost()
+    : createTauriHost();
 
 const outputs: Record<
   OutputKind,
