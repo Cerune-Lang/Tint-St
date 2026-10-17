@@ -4,7 +4,8 @@ mod interface;
 
 use interface::{
     CheckRequest, CompareKind, CompareRequest, Diagnostic, ExecuteRequest, ExecutionPath,
-    ExecutionResult, Observation, ObserveRequest, Target, parse_heap_limit,
+    ExecutionResult, ModuleFile, ModulesRequest, Observation, ObserveRequest, Target,
+    parse_heap_limit,
 };
 
 #[tauri::command]
@@ -146,6 +147,19 @@ fn check_source(
     cerune_cli::check_diagnostics(request)
 }
 
+#[tauri::command]
+fn load_modules(
+    source: String,
+    source_path: Option<String>,
+) -> Result<Vec<ModuleFile>, String> {
+    let request = ModulesRequest {
+        source,
+        source_path,
+    };
+
+    cerune_cli::load_modules(request)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -162,6 +176,7 @@ pub fn run() {
             delete_snapshot,
             diff_text,
             check_source,
+            load_modules,
             rename_source,
         ])
         .run(tauri::generate_context!())

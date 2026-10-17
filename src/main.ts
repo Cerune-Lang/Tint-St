@@ -82,7 +82,8 @@ type OutputKind =
   | "cmpLlvmAsm"
   | "cmpQbe"
   | "cmpQbeAsm"
-  | "cmpCAsm";
+  | "cmpCAsm"
+  | "modules";
 
 interface ObservationResult {
   sources: string;
@@ -137,6 +138,12 @@ interface Diagnostic {
   severity: string;
 }
 
+interface ModuleFile {
+  id: number;
+  name: string;
+  text: string;
+}
+
 const outputs: Record<
   OutputKind,
   string
@@ -182,6 +189,8 @@ const outputs: Record<
   cmpQbe: "",
   cmpQbeAsm: "",
   cmpCAsm: "",
+
+  modules: "",
 };
 
 const initialSource = `integer: i64 = 1 + 2;
@@ -198,6 +207,18 @@ let activeOutput: OutputKind = "ir";
 let activeGroup = "pipeline";
 let activeBackend = "c";
 let currentPath: string | null = null;
+
+interface OpenFile {
+  path: string;
+  name: string;
+  text: string;
+}
+
+const openFiles = new Map<string, OpenFile>();
+
+let untitledText = initialSource;
+
+let loadedModules: ModuleFile[] | null = null;
 
 let sourceView:
   | EditorView
@@ -630,6 +651,11 @@ function showOutput(
 
   const output = outputs[kind];
 
+  if (kind === "modules") {
+    renderModules();
+    return;
+  }
+
   if (output) {
     renderOutput(kind, output);
     return;
@@ -985,6 +1011,375 @@ function bindSettingsPersistence() {
   });
 }
 
+function setEditorText(text: string) {
+  sourceView?.dispatch({
+    changes: {
+      from: 0,
+      to: sourceView.state.doc.length,
+      insert: text,
+    },
+  });
+}
+
+function normalizePath(path: string): string {
+  return path
+    .replace(/^\\\\\?\\/, "")
+    .replace(/\\/g, "/")
+    .toLowerCase();
+}
+
+function directoryOf(path: string): string {
+  const index = Math.max(
+    path.lastIndexOf("/"),
+    path.lastIndexOf("\\"),
+  );
+
+  return index >= 0
+    ? path.slice(0, index)
+    : "";
+}
+
+function parseImports(
+  text: string,
+): { path: string; alias: string }[] {
+  const imports: {
+    path: string;
+    alias: string;
+  }[] = [];
+
+  const pattern =
+    /import\s+"([^"]+)"\s+as\s+([A-Za-z_][A-Za-z0-9_]*)\s*;/g;
+
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    imports.push({
+      path: match[1],
+      alias: match[2],
+    });
+  }
+
+  return imports;
+}
+
+function refreshFileTabs() {
+  const container =
+    document.querySelector<HTMLElement>(
+      "#file-tabs",
+    );
+
+  if (!container) {
+    return;
+  }
+
+  container.textContent = "";
+
+  const entries: OpenFile[] = [];
+
+  if (currentPath === null) {
+    entries.push({
+      path: "",
+      name: "Untitled.ceru",
+      text: "",
+    });
+  }
+
+  for (const file of openFiles.values()) {
+    entries.push(file);
+  }
+
+  for (const file of entries) {
+    const key = file.path;
+
+    const button =
+      document.createElement("button");
+
+    button.type = "button";
+
+    button.className = "file-tab";
+
+    button.classList.toggle(
+      "active",
+      (currentPath ?? "") === key,
+    );
+
+    const label =
+      document.createElement("span");
+
+    label.textContent = file.name;
+
+    button.append(label);
+
+    if (key !== "") {
+      const close =
+        document.createElement("span");
+
+      close.className = "file-tab-close";
+
+      close.textContent = "×";
+
+      close.title = "Close";
+
+      close.addEventListener(
+        "click",
+        (event) => {
+          event.stopPropagation();
+          closeFile(key);
+        },
+      );
+
+      button.append(close);
+    }
+
+    button.addEventListener("click", () => {
+      switchToFile(key);
+    });
+
+    container.append(button);
+  }
+}
+
+function switchToFile(key: string) {
+  if (!sourceView) {
+    return;
+  }
+
+  const currentKey = currentPath ?? "";
+
+  if (currentKey === key) {
+    return;
+  }
+
+  if (currentKey === "") {
+    untitledText = sourceText();
+  } else {
+    const file = openFiles.get(currentKey);
+
+    if (file) {
+      file.text = sourceText();
+    }
+  }
+
+  if (key === "") {
+    currentPath = null;
+
+    setEditorText(untitledText);
+
+    void updateFileName(null);
+  } else {
+    const file = openFiles.get(key);
+
+    if (!file) {
+      return;
+    }
+
+    currentPath = key;
+
+    setEditorText(file.text);
+
+    void updateFileName(key);
+  }
+
+  refreshFileTabs();
+}
+
+function closeFile(key: string) {
+  if (!openFiles.has(key)) {
+    return;
+  }
+
+  const wasActive = (currentPath ?? "") === key;
+
+  openFiles.delete(key);
+
+  if (wasActive) {
+    const next = openFiles.keys().next();
+
+    if (!next.done) {
+      switchToFile(next.value);
+    } else {
+      currentPath = null;
+
+      setEditorText(untitledText);
+
+      void updateFileName(null);
+    }
+  }
+
+  refreshFileTabs();
+}
+
+function openModule(module: ModuleFile) {
+  openFiles.set(module.name, {
+    path: module.name,
+    name: fileNameFromPath(module.name),
+    text: module.text,
+  });
+
+  switchToFile(module.name);
+}
+
+function renderModules() {
+  const container = outputElement();
+
+  container.textContent = "";
+
+  currentOriginLines = [];
+
+  if (!loadedModules) {
+    container.textContent =
+      "Press Emit to load modules.";
+    return;
+  }
+
+  const byNormalized = new Map(
+    loadedModules.map((module) => [
+      normalizePath(module.name),
+      module,
+    ]),
+  );
+
+  const entryNormalized = currentPath
+    ? normalizePath(currentPath)
+    : null;
+
+  const graph = document.createElement("div");
+
+  graph.className = "module-graph";
+
+  for (const module of loadedModules) {
+    const item = document.createElement("div");
+
+    item.className = "module-entry";
+
+    const isEntry = entryNormalized
+      ? normalizePath(module.name) ===
+        entryNormalized
+      : module.id === loadedModules[0].id;
+
+    if (isEntry) {
+      item.classList.add("entry");
+    }
+
+    const header =
+      document.createElement("button");
+
+    header.type = "button";
+
+    header.className = "module-header";
+
+    header.textContent =
+      `${module.id}. ${fileNameFromPath(
+        module.name,
+      )}${isEntry ? " (entry)" : ""}`;
+
+    header.title = module.name;
+
+    header.addEventListener("click", () => {
+      openModule(module);
+    });
+
+    item.append(header);
+
+    const directory = directoryOf(
+      normalizePath(module.name),
+    );
+
+    const imports = parseImports(module.text);
+
+    if (imports.length === 0) {
+      const empty =
+        document.createElement("div");
+
+      empty.className = "module-import empty";
+
+      empty.textContent = "no imports";
+
+      item.append(empty);
+    } else {
+      for (const entry of imports) {
+        const target = byNormalized.get(
+          normalizePath(
+            `${directory}/${entry.path}`,
+          ),
+        );
+
+        const row =
+          document.createElement("button");
+
+        row.type = "button";
+
+        row.className = "module-import";
+
+        row.classList.toggle(
+          "resolved",
+          Boolean(target),
+        );
+
+        row.textContent =
+          `${entry.alias} ← ${entry.path}`;
+
+        row.title = target
+          ? target.name
+          : "unresolved import";
+
+        if (target) {
+          row.addEventListener("click", () => {
+            openModule(target);
+          });
+        }
+
+        item.append(row);
+      }
+    }
+
+    graph.append(item);
+  }
+
+  container.append(graph);
+}
+
+async function runLoadModules() {
+  const button =
+    document.querySelector<HTMLButtonElement>(
+      "#emit-button",
+    );
+
+  if (button) {
+    button.disabled = true;
+  }
+
+  setStatus("Loading modules…", "working");
+
+  try {
+    const files = await invoke<ModuleFile[]>(
+      "load_modules",
+      {
+        source: sourceText(),
+        sourcePath: currentPath,
+      },
+    );
+
+    loadedModules = files;
+
+    renderModules();
+
+    setStatus(
+      `Loaded ${files.length} module${
+        files.length === 1 ? "" : "s"
+      }`,
+    );
+  } catch (error) {
+    outputElement().textContent = String(error);
+
+    setStatus("Module error", "error");
+  } finally {
+    if (button) {
+      button.disabled = false;
+    }
+  }
+}
+
 async function openFile() {
   const path = await open({
     multiple: false,
@@ -1002,17 +1397,18 @@ async function openFile() {
 
   const source = await readTextFile(path);
 
-  currentPath = path;
-
-  sourceView?.dispatch({
-    changes: {
-      from: 0,
-      to: sourceView.state.doc.length,
-      insert: source,
-    },
+  openFiles.set(path, {
+    path,
+    name: fileNameFromPath(path),
+    text: source,
   });
 
-  await updateFileName(path);
+  if ((currentPath ?? "") === path) {
+    setEditorText(source);
+  } else {
+    switchToFile(path);
+  }
+
   setStatus("Opened");
 }
 
@@ -1041,7 +1437,16 @@ async function saveFile() {
 
   currentPath = path;
 
+  openFiles.set(path, {
+    path,
+    name: fileNameFromPath(path),
+    text: sourceText(),
+  });
+
   await updateFileName(path);
+
+  refreshFileTabs();
+
   setStatus("Saved");
 }
 
@@ -1125,6 +1530,11 @@ async function runExecution() {
 async function emit() {
   if (activeGroup === "compare") {
     await runCompare();
+    return;
+  }
+
+  if (activeGroup === "modules") {
+    await runLoadModules();
     return;
   }
 
@@ -1486,9 +1896,23 @@ async function saveAsFile() {
     sourceText(),
   );
 
+  const previous = currentPath;
+
   currentPath = path;
 
+  if (previous && previous !== path) {
+    openFiles.delete(previous);
+  }
+
+  openFiles.set(path, {
+    path,
+    name: fileNameFromPath(path),
+    text: sourceText(),
+  });
+
   await updateFileName(path);
+
+  refreshFileTabs();
 
   setStatus("Saved As");
 }
@@ -1758,9 +2182,23 @@ async function renameCurrentFile() {
         },
       );
 
+    const oldPath = currentPath;
+
     currentPath = newPath;
 
+    if (openFiles.has(oldPath)) {
+      openFiles.delete(oldPath);
+
+      openFiles.set(newPath, {
+        path: newPath,
+        name: fileNameFromPath(newPath),
+        text: sourceText(),
+      });
+    }
+
     await updateFileName(newPath);
+
+    refreshFileTabs();
 
     setStatus("Renamed");
   } catch (error) {
@@ -2032,5 +2470,7 @@ showGroup("pipeline");
     bindSettingsPersistence();
 
     void refreshSnapshots();
+
+    refreshFileTabs();
   },
 );

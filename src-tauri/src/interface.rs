@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Target {
@@ -124,6 +124,25 @@ pub struct Diagnostic {
 pub struct CheckRequest {
     pub source: String,
     pub source_path: Option<String>,
+}
+
+pub struct ModulesRequest {
+    pub source: String,
+    pub source_path: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModuleFile {
+    pub id: u32,
+    pub name: String,
+    pub text: String,
+}
+
+#[derive(Deserialize)]
+pub struct SourcesBundle {
+    #[serde(default)]
+    pub files: Vec<ModuleFile>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

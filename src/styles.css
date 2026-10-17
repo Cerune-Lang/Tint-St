@@ -467,6 +467,142 @@ button {
   box-shadow: inset 2px 0 0 #78c5ef;
 }
 
+/* File tabs */
+
+.file-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  min-height: 30px;
+
+  padding: 0 8px;
+
+  border-bottom: 1px solid #e7f0f6;
+
+  background: #f6fbfe;
+}
+
+.file-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  flex: 0 0 auto;
+
+  padding: 4px 8px;
+
+  border-radius: 6px 6px 0 0;
+
+  background: transparent;
+  color: #91a5b4;
+
+  font-size: 11px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.file-tab:hover {
+  color: #527c95;
+}
+
+.file-tab.active {
+  background: #ffffff;
+  color: #3983ad;
+  box-shadow: inset 0 -2px 0 #78c5ef;
+}
+
+.file-tab-close {
+  color: #b6c6d2;
+  font-weight: 700;
+}
+
+.file-tab-close:hover {
+  color: #d06f6f;
+}
+
+/* Module graph */
+
+.module-graph {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.module-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+
+  padding: 8px 10px;
+
+  border: 1px solid #e2eef7;
+  border-radius: 8px;
+
+  background: #ffffff;
+}
+
+.module-entry.entry {
+  border-color: #bcdbed;
+  background: #f4fbff;
+}
+
+.module-header {
+  align-self: flex-start;
+
+  background: transparent;
+
+  color: #317fa8;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.module-header:hover {
+  text-decoration: underline;
+}
+
+.module-import {
+  align-self: flex-start;
+
+  padding: 2px 6px;
+
+  border-radius: 5px;
+
+  background: transparent;
+  color: #7b8f9d;
+
+  font-family:
+    "Cascadia Code",
+    "SFMono-Regular",
+    Consolas,
+    monospace;
+
+  font-size: 11px;
+
+  cursor: default;
+}
+
+.module-import.resolved {
+  color: #3983ad;
+  cursor: pointer;
+}
+
+.module-import.resolved:hover {
+  background: #e8f4fc;
+}
+
+.module-import.empty {
+  color: #b6c6d2;
+  font-style: italic;
+}
+
 /* Status bar */
 
 .statusbar {
