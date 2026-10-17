@@ -217,3 +217,78 @@ pub struct CompareRequest {
 pub struct ExecutionResult {
     pub output: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        parse_heap_limit, CompareKind, ExecutionPath, SourcesBundle, Target,
+    };
+
+    #[test]
+    fn parses_heap_limits() {
+        assert_eq!(parse_heap_limit(None, "--flag").unwrap(), None);
+
+        assert_eq!(parse_heap_limit(Some("   ".to_owned()), "--flag").unwrap(), None);
+
+        assert_eq!(
+            parse_heap_limit(Some("1024".to_owned()), "--flag").unwrap(),
+            Some(1024)
+        );
+
+        assert!(parse_heap_limit(Some("1.5".to_owned()), "--flag").is_err());
+
+        assert!(parse_heap_limit(Some("-1".to_owned()), "--flag").is_err());
+
+        assert!(parse_heap_limit(Some("abc".to_owned()), "--flag").is_err());
+    }
+
+    #[test]
+    fn parses_targets() {
+        assert_eq!(
+            Target::parse("x86_64-pc-windows-msvc").unwrap(),
+            Target::WindowsX64
+        );
+
+        assert_eq!(
+            Target::parse("x86_64-unknown-linux-gnu").unwrap(),
+            Target::LinuxX64
+        );
+
+        assert!(Target::parse("wasm32-unknown-unknown").is_err());
+    }
+
+    #[test]
+    fn parses_execution_paths_and_comparisons() {
+        assert_eq!(ExecutionPath::parse("ssa").unwrap(), ExecutionPath::Ssa);
+
+        assert!(ExecutionPath::parse("jvm").is_err());
+
+        assert_eq!(CompareKind::parse("qbeAsm").unwrap(), CompareKind::QbeAsm);
+
+        assert_eq!(CompareKind::parse("object").unwrap(), CompareKind::Object);
+
+        assert!(CompareKind::parse("unknown").is_err());
+    }
+
+    #[test]
+    fn deserializes_sources_bundle() {
+        let json = r#"{"schema":"cerune-sources-v1","files":[{"id":1,"name":"main.ceru","text":"integer: i64 = 1;"}]}"#;
+
+        let bundle: SourcesBundle = serde_json::from_str(json).unwrap();
+
+        assert_eq!(bundle.files.len(), 1);
+
+        assert_eq!(bundle.files[0].id, 1);
+
+        assert_eq!(bundle.files[0].name, "main.ceru");
+
+        assert!(bundle.files[0].text.contains("integer"));
+    }
+
+    #[test]
+    fn sources_bundle_defaults_to_empty() {
+        let bundle: SourcesBundle = serde_json::from_str("{}").unwrap();
+
+        assert!(bundle.files.is_empty());
+    }
+}
