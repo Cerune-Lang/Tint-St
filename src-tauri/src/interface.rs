@@ -90,6 +90,7 @@ pub struct Observation {
 
     pub ssa_map: String,
     pub ssa_lowered: String,
+    pub ssa_lowered_map: String,
     pub manifest: String,
 
     pub c: String,

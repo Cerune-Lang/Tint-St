@@ -48,6 +48,7 @@ type OutputKind =
   | "ssa"
   | "ssaMap"
   | "ssaLowered"
+  | "ssaLoweredMap"
   | "manifest"
   | "c"
   | "cAsm"
@@ -73,6 +74,7 @@ interface ObservationResult {
 
   ssaMap: string;
   ssaLowered: string;
+  ssaLoweredMap: string;
   manifest: string;
 
   c: string;
@@ -105,6 +107,7 @@ const outputs: Record<
 
   ssaMap: "",
   ssaLowered: "",
+  ssaLoweredMap: "",
   manifest: "",
 
   c: "",

@@ -23,6 +23,7 @@ Cerune source
      │    ├─ SSA
      │    ├─ SSA Map
      │    ├─ SSA → MIR
+     │    ├─ SSA → MIR Map
      │    └─ Manifest
      │
      ├─ Backends
@@ -63,6 +64,7 @@ Cerune source
 - SSA 化された MIR を表示
 - SSA マッピングを表示
 - SSA から MIR への変換結果を表示
+- SSA から MIR へのマッピングを表示
 - 観測 manifest を表示
 - C を生成
 - LLVM IR を生成
@@ -304,7 +306,7 @@ Tint*
 
 `Native SSA` を有効にすると、Native LIR / ASM / Object は SSA を経由して生成されます。
 
-`SSA Map`、`SSA → MIR`、`Manifest` は `cerune observe --ssa` が生成した観測バンドルから取得します。`SSA Map` は SSA 構築時の対応、`SSA → MIR` は SSA を MIR へ戻した結果、`Manifest` は観測スキーマと変換の索引です。
+`SSA Map`、`SSA → MIR`、`SSA → MIR Map`、`Manifest` は `cerune observe --ssa` が生成した観測バンドルから取得します。`SSA Map` は SSA 構築時の対応、`SSA → MIR` と `SSA → MIR Map` は SSA を MIR へ戻した結果とその対応、`Manifest` は観測スキーマと変換の索引です。
 
 `str heap` / `arr heap` にバイト数を入力すると、`--string-heap-limit` / `--array-heap-limit` として各 Cerune 呼び出しへ渡されます。空欄の場合は Cerune の既定値を使います。
 

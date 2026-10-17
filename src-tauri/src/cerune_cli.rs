@@ -109,8 +109,12 @@ pub fn observe(request: ObserveRequest) -> Result<Observation, String> {
 
         let bytecode = run_cerune_with_heap("emit-bytecode", &source_path, &[], &heap)?;
 
-        let (ssa_map, ssa_lowered, manifest) =
-            run_cerune_observe(&source_path, target_name, &heap)?;
+        let ObserveBundle {
+            ssa_map,
+            ssa_lowered,
+            ssa_lowered_map,
+            manifest,
+        } = run_cerune_observe(&source_path, target_name, &heap)?;
 
         Ok(Observation {
             sources,
@@ -120,6 +124,7 @@ pub fn observe(request: ObserveRequest) -> Result<Observation, String> {
 
             ssa_map,
             ssa_lowered,
+            ssa_lowered_map,
             manifest,
 
             c,
@@ -257,11 +262,18 @@ fn run_cerune_with_heap(
     run_cerune(command, source_path, &merged)
 }
 
+struct ObserveBundle {
+    ssa_map: String,
+    ssa_lowered: String,
+    ssa_lowered_map: String,
+    manifest: String,
+}
+
 fn run_cerune_observe(
     source_path: &Path,
     target: &str,
     heap: &[String],
-) -> Result<(String, String, String), String> {
+) -> Result<ObserveBundle, String> {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -289,10 +301,18 @@ fn run_cerune_observe(
         let ssa_lowered = fs::read_to_string(directory.join("program.ssa-lowered.mir.txt"))
             .map_err(|error| format!("failed to read SSA-lowered MIR: {error}"))?;
 
+        let ssa_lowered_map = fs::read_to_string(directory.join("program.ssa-lowered-map.txt"))
+            .map_err(|error| format!("failed to read SSA lowering mapping: {error}"))?;
+
         let manifest = fs::read_to_string(directory.join("manifest.json"))
             .map_err(|error| format!("failed to read observation manifest: {error}"))?;
 
-        Ok((ssa_map, ssa_lowered, manifest))
+        Ok(ObserveBundle {
+            ssa_map,
+            ssa_lowered,
+            ssa_lowered_map,
+            manifest,
+        })
     })();
 
     let _ = fs::remove_dir_all(&directory);
