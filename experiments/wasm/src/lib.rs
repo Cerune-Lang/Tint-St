@@ -52,7 +52,11 @@ fn message(error: &Diagnostic) -> String {
 #[wasm_bindgen]
 pub fn capabilities() -> String {
     "{\"check\":true,\"observe\":true,\"execute\":true,\
-\"compare\":false,\"modules\":false,\"snapshots\":false,\"rename\":false}"
+\"compare\":false,\"modules\":false,\"snapshots\":false,\"rename\":false,\
+\"outputs\":[\"sources\",\"ir\",\"bytecode\",\"wat\",\
+\"irOutput\",\"mirOutput\",\"vmOutput\"],\
+\"executionPaths\":[\"ir\",\"mir\",\"vm\"],\
+\"native\":false,\"heapLimits\":false}"
         .to_owned()
 }
 
@@ -101,7 +105,19 @@ pub fn execute(source: &str, path: &str) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{check, emit_ir, execute};
+    use super::{capabilities, check, emit_ir, execute};
+
+    #[test]
+    fn capabilities_describe_supported_outputs() {
+        let capabilities = capabilities();
+
+        assert!(capabilities.contains("\"outputs\""));
+        assert!(capabilities.contains("\"sources\""));
+        assert!(capabilities.contains("\"bytecode\""));
+        assert!(capabilities.contains("\"wat\""));
+        assert!(capabilities.contains("\"executionPaths\""));
+        assert!(capabilities.contains("\"native\":false"));
+    }
 
     #[test]
     fn check_reports_a_diagnostic_for_invalid_source() {

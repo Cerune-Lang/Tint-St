@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import {
   createDeferredWasmBackend,
   createWasmBackend,
+  WASM_EXECUTION_PATHS,
+  WASM_OUTPUTS,
   type WasmModule,
 } from "../src/backend-wasm";
 
@@ -62,7 +64,40 @@ test("reports the capabilities exposed by the wasm module", async () => {
     modules: false,
     snapshots: false,
     rename: false,
+
+    outputs: WASM_OUTPUTS,
+    executionPaths: WASM_EXECUTION_PATHS,
+    native: false,
+    heapLimits: false,
   });
+});
+
+test("keeps capability details reported by the wasm module", async () => {
+  const backend = createWasmBackend(
+    fakeModule({
+      capabilities: () =>
+        JSON.stringify({
+          check: true,
+          observe: true,
+          execute: true,
+          compare: false,
+          modules: false,
+          snapshots: false,
+          rename: false,
+          outputs: ["ir"],
+          executionPaths: ["ir"],
+          native: true,
+          heapLimits: true,
+        }),
+    }),
+  );
+
+  const capabilities = await backend.capabilities();
+
+  assert.deepEqual(capabilities.outputs, ["ir"]);
+  assert.deepEqual(capabilities.executionPaths, ["ir"]);
+  assert.equal(capabilities.native, true);
+  assert.equal(capabilities.heapLimits, true);
 });
 
 test("parses diagnostics from the wasm module", async () => {

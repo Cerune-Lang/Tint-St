@@ -68,9 +68,17 @@ import {
   type Settings,
 } from "./settings";
 
+import {
+  backendAvailable,
+  executionPathForOutput,
+  groupForOutput,
+  outputAvailable,
+  unavailableReason,
+  type OutputGroup,
+} from "./capabilities";
+
 import type {
   Diagnostic,
-  ExecutionPath,
   ModuleFile,
   OpenFile,
   OutputKind,
@@ -272,27 +280,6 @@ function setDiagnosticStatus(
   element.dataset.state = "error";
 }
 
-function executionPathForOutput(
-  kind: OutputKind,
-): ExecutionPath | null {
-  switch (kind) {
-    case "irOutput":
-      return "ir";
-
-    case "mirOutput":
-      return "mir";
-
-    case "ssaOutput":
-      return "ssa";
-
-    case "vmOutput":
-      return "vm";
-
-    default:
-      return null;
-  }
-}
-
 function compareKindForOutput(
   kind: OutputKind,
 ): string | null {
@@ -486,9 +473,39 @@ function jumpToOrigin(element: HTMLElement) {
   sourceView.focus();
 }
 
+function showNotice(
+  label: string,
+  group: OutputGroup,
+) {
+  currentOriginLines = [];
+
+  outputElement().textContent =
+    `${label}: ${unavailableReason(group)}`;
+
+  setStatus("Unavailable");
+}
+
+function showUnavailableNotice(kind: OutputKind) {
+  showNotice(
+    outputLabelForKind(kind),
+    groupForOutput(kind),
+  );
+}
+
 function showOutput(
   kind: OutputKind,
 ) {
+  const tab =
+    document.querySelector<HTMLButtonElement>(
+      `.tab[data-output="${kind}"]`,
+    );
+
+  // バックエンドが提供しない出力は選択せず、理由を表示します。
+  if (tab?.classList.contains("unavailable")) {
+    showUnavailableNotice(kind);
+    return;
+  }
+
   activeOutput = kind;
 
   document
@@ -559,7 +576,8 @@ function showBackend(
     tabs.find(
       (button) =>
         button.dataset.backend === backend &&
-        button.dataset.output === activeOutput,
+        button.dataset.output === activeOutput &&
+        !button.classList.contains("unavailable"),
     );
 
   if (activeTab) {
@@ -569,14 +587,27 @@ function showBackend(
   const firstTab =
     tabs.find(
       (button) =>
-        button.dataset.backend === backend,
+        button.dataset.backend === backend &&
+        !button.classList.contains("unavailable"),
     );
 
   if (firstTab?.dataset.output) {
     showOutput(
       firstTab.dataset.output as OutputKind,
     );
+
+    return;
   }
+
+  // このバックエンドの出力がすべて非対応の場合は理由を表示します。
+  const label =
+    document
+      .querySelector<HTMLButtonElement>(
+        `.backend-tab[data-backend="${backend}"]`,
+      )
+      ?.textContent?.trim() ?? backend;
+
+  showNotice(label, "backends");
 }
 
 function showGroup(
@@ -651,14 +682,26 @@ function showGroup(
   const firstTab =
     tabs.find(
       (button) =>
-        button.dataset.group === group,
+        button.dataset.group === group &&
+        !button.classList.contains("unavailable"),
     );
 
   if (firstTab?.dataset.output) {
     showOutput(
       firstTab.dataset.output as OutputKind,
     );
+
+    return;
   }
+
+  showNotice(
+    document
+      .querySelector<HTMLButtonElement>(
+        `.group-tab[data-group="${group}"]`,
+      )
+      ?.textContent?.trim() ?? group,
+    group as OutputGroup,
+  );
 }
 
 function annotateOrigins(): boolean {
@@ -1920,36 +1963,200 @@ async function renameCurrentFile() {
   }
 }
 
-function setGroupEnabled(
+const NATIVE_SETTING_REASON =
+  "この設定はネイティブツールチェーンが必要なため、このバックエンドでは使えません。" +
+  "Desktop 版（Tauri）またはローカル HTTP 版で利用できます。";
+
+const HEAP_SETTING_REASON =
+  "ヒープ上限の設定はこのバックエンドでは使えません。" +
+  "Desktop 版（Tauri）またはローカル HTTP 版で利用できます。";
+
+function markUnavailable(
+  button: HTMLButtonElement,
+  unavailable: boolean,
+  reason: string,
+) {
+  button.classList.toggle(
+    "unavailable",
+    unavailable,
+  );
+
+  if (unavailable) {
+    button.setAttribute("aria-disabled", "true");
+    button.title = reason;
+  } else {
+    button.removeAttribute("aria-disabled");
+    button.removeAttribute("title");
+  }
+}
+
+function setGroupAvailability(
   group: string,
-  enabled: boolean,
+  available: boolean,
+  reason: string,
 ) {
   document
     .querySelectorAll<HTMLButtonElement>(
-      `.group-tab[data-group="${group}"], ` +
-        `.tab[data-group="${group}"]`,
+      `.group-tab[data-group="${group}"]`,
     )
     .forEach((button) => {
-      button.disabled = !enabled;
+      markUnavailable(
+        button,
+        !available,
+        reason,
+      );
     });
+}
+
+const originalTitles = new WeakMap<
+  Element,
+  string | null
+>();
+
+function restoreTitle(element: Element) {
+  const original =
+    originalTitles.get(element) ?? null;
+
+  if (original === null) {
+    element.removeAttribute("title");
+  } else {
+    element.setAttribute("title", original);
+  }
+}
+
+function setControlDisabled(
+  selector: string,
+  disabled: boolean,
+  reason: string,
+) {
+  const element =
+    document.querySelector<
+      HTMLInputElement | HTMLSelectElement
+    >(selector);
+
+  if (!element) {
+    return;
+  }
+
+  const label = element.closest("label");
+
+  // 無効化しても既存の `title`（例: ヒープ上限の説明）を失わないよう、
+  // 元の値を覚えておきます。
+  if (!originalTitles.has(element)) {
+    originalTitles.set(
+      element,
+      element.getAttribute("title"),
+    );
+  }
+
+  if (label && !originalTitles.has(label)) {
+    originalTitles.set(
+      label,
+      label.getAttribute("title"),
+    );
+  }
+
+  element.disabled = disabled;
+
+  if (disabled) {
+    element.title = reason;
+
+    if (label) {
+      label.title = reason;
+    }
+  } else {
+    restoreTitle(element);
+
+    if (label) {
+      restoreTitle(label);
+    }
+  }
+}
+
+function ensureSelectionAvailable(
+  capabilities: BackendCapabilities,
+) {
+  // 選択中のバックエンドが使えない場合は、使えるものへ切り替えます。
+  if (
+    !backendAvailable(
+      activeBackend,
+      capabilities,
+    )
+  ) {
+    const available =
+      document.querySelector<HTMLButtonElement>(
+        ".backend-tab:not(.unavailable)",
+      );
+
+    if (available?.dataset.backend) {
+      activeBackend = available.dataset.backend;
+    }
+  }
+
+  const currentTab =
+    document.querySelector<HTMLButtonElement>(
+      `.tab[data-output="${activeOutput}"]`,
+    );
+
+  if (
+    currentTab &&
+    !currentTab.classList.contains(
+      "unavailable",
+    )
+  ) {
+    return;
+  }
+
+  // 選択中の出力が使えない場合は、使える出力を持つグループへ移動します。
+  const availableGroup = Array.from(
+    document.querySelectorAll<HTMLButtonElement>(
+      ".group-tab",
+    ),
+  ).find((button) => {
+    const group = button.dataset.group ?? "pipeline";
+
+    if (button.classList.contains("unavailable")) {
+      return false;
+    }
+
+    return Array.from(
+      document.querySelectorAll<HTMLButtonElement>(
+        `.tab[data-group="${group}"]`,
+      ),
+    ).some(
+      (tab) =>
+        !tab.classList.contains("unavailable"),
+    );
+  });
+
+  if (availableGroup?.dataset.group) {
+    showGroup(availableGroup.dataset.group);
+
+    return;
+  }
+
+  setStatus("Unavailable");
 }
 
 function applyCapabilities(
   capabilities: BackendCapabilities,
 ) {
-  setGroupEnabled(
+  setGroupAvailability(
     "compare",
     capabilities.compare,
+    unavailableReason("compare"),
   );
 
-  setGroupEnabled(
+  setGroupAvailability(
     "modules",
     capabilities.modules,
+    unavailableReason("modules"),
   );
 
-  setGroupEnabled(
+  setGroupAvailability(
     "execution",
     capabilities.execute,
+    unavailableReason("execution"),
   );
 
   const emitButton =
@@ -1987,6 +2194,70 @@ function applyCapabilities(
   if (fileName) {
     fileName.disabled = !capabilities.rename;
   }
+
+  document
+    .querySelectorAll<HTMLButtonElement>(
+      '.tab[data-output]',
+    )
+    .forEach((button) => {
+      const kind = button.dataset
+        .output as OutputKind;
+
+      markUnavailable(
+        button,
+        !outputAvailable(kind, capabilities),
+        unavailableReason(
+          groupForOutput(kind),
+        ),
+      );
+    });
+
+  document
+    .querySelectorAll<HTMLButtonElement>(
+      ".backend-tab",
+    )
+    .forEach((button) => {
+      markUnavailable(
+        button,
+        !backendAvailable(
+          button.dataset.backend ?? "",
+          capabilities,
+        ),
+        unavailableReason("backends"),
+      );
+    });
+
+  // ネイティブツールチェーン依存の設定。
+  const native = capabilities.native !== false;
+
+  [
+    "#target-select",
+    "#origins-toggle",
+    "#native-ssa-toggle",
+  ].forEach((selector) => {
+    setControlDisabled(
+      selector,
+      !native,
+      NATIVE_SETTING_REASON,
+    );
+  });
+
+  // ヒープ上限の設定。
+  const heapLimits =
+    capabilities.heapLimits !== false;
+
+  [
+    "#string-heap-limit",
+    "#array-heap-limit",
+  ].forEach((selector) => {
+    setControlDisabled(
+      selector,
+      !heapLimits,
+      HEAP_SETTING_REASON,
+    );
+  });
+
+  ensureSelectionAvailable(capabilities);
 }
 
 const ALL_DISABLED: BackendCapabilities = {
@@ -2232,10 +2503,19 @@ window.addEventListener(
         button.addEventListener(
           "click",
           () => {
-            showOutput(
-              button.dataset
-                .output as OutputKind,
-            );
+            const kind = button.dataset
+              .output as OutputKind;
+
+            if (
+              button.classList.contains(
+                "unavailable",
+              )
+            ) {
+              showUnavailableNotice(kind);
+              return;
+            }
+
+            showOutput(kind);
           },
         );
       });
@@ -2247,10 +2527,24 @@ window.addEventListener(
           button.addEventListener(
             "click",
             () => {
-              showGroup(
+              const group =
                 button.dataset.group ??
-                  "pipeline",
-              );
+                "pipeline";
+
+              if (
+                button.classList.contains(
+                  "unavailable",
+                )
+              ) {
+                showNotice(
+                  button.textContent?.trim() ??
+                    group,
+                  group as OutputGroup,
+                );
+                return;
+              }
+
+              showGroup(group);
             },
           );
         });
@@ -2262,6 +2556,19 @@ window.addEventListener(
         button.addEventListener(
           "click",
           () => {
+            if (
+              button.classList.contains(
+                "unavailable",
+              )
+            ) {
+              showNotice(
+                button.textContent?.trim() ??
+                  "backend",
+                "backends",
+              );
+              return;
+            }
+
             showBackend(
               button.dataset.backend ?? "c",
             );

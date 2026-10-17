@@ -96,9 +96,11 @@ button {
   background: #ffffff;
 }
 
+/* 3 つの子要素（ヘッダー / ファイルタブ / エディタ）に対応する 3 行。
+   ファイルタブは内容ぶんだけ、エディタが残りを占める。 */
 .source-panel {
   display: grid;
-  grid-template-rows: 42px 1fr;
+  grid-template-rows: 42px auto minmax(0, 1fr);
 }
 
 .output-panel {
@@ -420,6 +422,27 @@ button {
 .tab.active {
   color: #3983ad;
   border-bottom-color: #78c5ef;
+}
+
+/* バックエンドが提供しない機能。押すと理由を表示する（無反応にはしない）。 */
+
+.tab.unavailable,
+.group-tab.unavailable,
+.backend-tab.unavailable {
+  opacity: 0.4;
+
+  cursor: not-allowed;
+}
+
+.tab.unavailable:hover {
+  color: #91a5b4;
+
+  border-bottom-color: transparent;
+}
+
+.group-tab.unavailable:hover {
+  background: transparent;
+  color: #91a5b4;
 }
 
 /* Generated output */
