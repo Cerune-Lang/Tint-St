@@ -290,6 +290,18 @@ cargo test -p tint-server                             # HTTP layer (real socket,
 
 Integration tests are skipped when `cerune` is not on `PATH`. When `clang` or `wsl qbe` is missing, `observe` reports the corresponding assembly as "unavailable".
 
+### Browser (Playground)
+
+The same UI can run in a browser through the local HTTP server. See [`docs/playground-architecture.md`](docs/playground-architecture.md) for details.
+
+```sh
+cargo run -p tint-server   # prints base_url and token
+npm run build
+npm run preview            # open the printed URL with ?server=<base_url>&token=<token>
+```
+
+The desktop app also starts the server automatically.
+
 ## How it works
 
 Tint* does not embed Cerune's compiler implementation inside the application.

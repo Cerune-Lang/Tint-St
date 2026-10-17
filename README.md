@@ -303,6 +303,18 @@ cargo test -p tint-server                             # HTTP 層（ソケット�
 
 統合テストは `cerune` が見つからない環境ではスキップします。`observe` は `clang` や `wsl qbe` が無い場合、該当する ASM を「unavailable」として扱います。
 
+### ブラウザ版（Playground）
+
+同じ UI をローカル HTTP サーバー経由でブラウザからも利用できます。詳細は [`docs/playground-architecture.md`](docs/playground-architecture.md) を参照してください。
+
+```sh
+cargo run -p tint-server   # base_url と token を標準出力に表示
+npm run build
+npm run preview            # 表示された URL に ?server=<base_url>&token=<token> を付けて開く
+```
+
+デスクトップアプリを起動した場合もサーバーは自動で立ち上がります。
+
 ## 仕組み
 
 Tint* は、Cerune のコンパイラ実装そのものをアプリケーション内部へ持ち込みません。

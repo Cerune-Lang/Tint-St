@@ -53,6 +53,9 @@
 - ビルド: Vite + TypeScript、UI は CodeMirror 6。
 - フロントエンドは `TintBackend`（観測・実行）と `TintHost`
   （ファイル入出力・ウィンドウ）の 2 つのインターフェースに依存する。
+- 起動時に URL クエリ（`?server=<url>&token=<token>`）で実行環境を判定する
+  （`src/environment.ts`）。ブラウザ版は `createHttpBackend()` +
+  `createWebHost()`、それ以外は Tauri 版を使う。
 - Tauri 依存は `src/backend-tauri.ts` に集約済み（`src/main.ts` から
   `@tauri-apps/*` の import は撤去済み）。
 - Rust 側は `cerune` CLI を子プロセスとして起動し、標準出力を解析する。
@@ -198,7 +201,8 @@ Tauri 版は全フィールドが `true` のため、現行 UI は変化しま�
 - **方式 B（ローカル HTTP）**
   - 待ち受けは `127.0.0.1` に限定し、外部公開しない。
   - 起動ごとに一時トークンを発行し、リクエストで検証する。
-  - 許可オリジンを明示し、CORS を最小化する。
+  - CORS は loopback オリジン（`localhost` / `127.0.0.1` / `[::1]`）のみ
+    許可する。それ以外のオリジンには CORS ヘッダを返さない。
   - 子プロセス（clang / qbe / llvm）の実行はタイムアウトとヒープ上限で
     制限する。
 - **方式 C（ブラウザ WASM）**
@@ -214,7 +218,7 @@ Tauri 版は全フィールドが `true` のため、現行 UI は変化しま�
 | 0 | フロントエンドのバックエンド抽象化 (`TintBackend`/`TintHost`) | 完了 |
 | 1 | 方式 B: 共有 `core` 切り出し・`tint-server`・`createHttpBackend()` | 一部完了 |
 | 1.5 | 方式 B: Tauri からのサーバー自動起動とライフサイクル管理 | 完了 |
-| 2 | 方式 B: ブラウザ用 `TintHost` と Web ビルド手順を追加 | 未着手 |
+| 2 | 方式 B: ブラウザ用 `TintHost` と Web ビルド手順を追加 | 完了 |
 | 3 | 方式 C: Cerune の lib API 状況を調査し、WASM ラッパを試作 | 未着手 |
 | 4 | 方式 C: `createWasmBackend()` と機能制限の検証 | 未着手 |
 | 5 | 3 バックエンドの統合テストとドキュメント整備 | 未着手 |
@@ -236,8 +240,11 @@ Tauri 版は全フィールドが `true` のため、現行 UI は変化しま�
     **同一プロセス内のバックグラウンドスレッド**で自動起動
     （`tint_server::spawn()`）。接続情報（`baseUrl`/`token`）は Tauri
     コマンド `server_info` で取得でき、プロセス終了とともに停止します。
+  - フェーズ 2: ブラウザ用 `TintHost`（`src/host-web.ts`）と実行環境の
+    判定（`src/environment.ts`）。File System Access API が使えない場合は
+    ファイル選択とダウンロードにフォールバック。CORS は loopback
+    オリジンのみ許可。
 - 未実装:
-  - ブラウザ用 `TintHost` と Web ビルド（フェーズ 2）。
   - 方式 C（ブラウザ WASM）。Cerune のライブラリ API が前提。
 
 ### 自動起動方式の補足
@@ -246,3 +253,29 @@ Tauri 版は全フィールドが `true` のため、現行 UI は変化しま�
 スレッドで動かします。sidecar の同梱・終了処理が不要で、ライフサイクルは
 アプリのプロセスに一致します。より強い分離が必要になった場合は sidecar へ
 切り替えられます（`tint-server` は単体バイナリとしても動作します）。
+
+## 11. ブラウザ版の使い方（フェーズ 2 時点）
+
+1. サーバーを起動する。いずれかの方法で `base_url` と `token` を取得します。
+
+   - デスクトップアプリを起動すると自動で立ち上がり、標準出力に接続情報が
+     表示されます（フロントエンドからは `server_info` でも取得可能）。
+   - 単体で起動する場合: `cargo run -p tint-server`。
+
+2. フロントエンドを配信してブラウザで開く。
+
+   ```sh
+   npm run build
+   npm run preview
+   ```
+
+3. クエリ文字列に接続情報を付けて開く。
+
+   ```
+   http://localhost:4173/?server=<base_url>&token=<token>
+   ```
+
+`server` と `token` が両方あるときだけブラウザ版として動作し、無ければ
+Tauri 版として起動します。ブラウザ版ではファイル入出力にブラウザ API を
+使い、import 解決は論理ファイル名に基づくため、ネイティブ版ほど完全な
+パス解決はできません（既知の制限）。
