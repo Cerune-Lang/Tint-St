@@ -111,19 +111,33 @@
 ### C. ブラウザ WASM
 
 - 概要: Cerune を WebAssembly にビルドし、ブラウザ内で完結実行する。
-- 前提・制約:
-  - Cerune は単一クレート（`cerune-lang`, edition 2024）で
-    外部依存が無いため、WASM 化の下地は良い。
-  - ただし現状バイナリは `src/main.rs`（bin ターゲット）。ブラウザから
-    呼ぶには **Cerune 側にライブラリ API（lib ターゲット / 公開関数）が
-    必要**。これは Cerune 側の対応が前提であり、Tint 側では実装できない。
-  - ネイティブツール（clang / qbe / llvm）とファイルシステムに依存する
-    機能は提供できない。
-- 必要作業:
-  - Cerune がライブラリ API を公開していることを確認/調整する。
-  - `wasm-bindgen` などでラッパを作成し、`createWasmBackend()` を追加。
+- 調査結果（フェーズ 3）:
+  - `cerune-lang` は `src/lib.rs` で `compile` / `compile_to_ir_text` /
+    `compile_to_bytecode_text` / `compile_to_wat` / `run_ir` / `run_mir` /
+    `run_vm` などのライブラリ API を**既に公開**している。
+  - 外部依存はゼロで、`wasm32-unknown-unknown` へそのままビルドできる
+    （試作で確認済み）。Cerune 側の変更は不要。
+  - 提供できる機能: 構文・意味検査、IR / bytecode / WAT の生成、
+    IR / MIR / VM 実行。ネイティブツール（clang / qbe / llvm）に依存する
+    比較・オブジェクト生成・リンクは提供できない。import 解決と
+    スナップショット / 改名も対象外。
+- 試作: `experiments/wasm`（クレート名 `tint-wasm`）。
+  - ルートの Cargo ワークスペースからは除外（`exclude`）し、単体で
+    ビルドする独立クレート。`cerune-lang` へは path 依存のため、隣接する
+    Cerune チェックアウト（`../Cerune`）が必要。
+  - ビルド: `cd experiments/wasm && wasm-pack build --release --target web`。
+    `wasm-opt` 後に約 1.1 MB の `.wasm` が生成される。
+  - 検証: Node 上で `check` / `emit_ir` / `emit_wat` / `execute("vm")` が
+    動作することを確認済み。
+- 本実装に必要な作業:
+  - フロントエンドに `createWasmBackend()` を追加し、WASM 版の実行経路に
+    接続する。
+  - import 付きソースを扱う場合は `modules` の解決を WASM 側で行う設計が
+    必要（現状は対象外）。
+  - `wasm-bindgen` のグルーコードを Vite ビルドに組み込む。
 - 長所: サーバー不要。完全にブラウザ内で完結。
-- 短所: 提供できる機能が限定的。ビルド工程が増える。
+- 短所: 提供できる機能が限定的。ビルド工程が増える。WASM の配布サイズ
+  （現状約 1.1 MB）を許容する必要がある。
 
 ## 5. 共通バックエンド API
 
@@ -219,7 +233,7 @@ Tauri 版は全フィールドが `true` のため、現行 UI は変化しま�
 | 1 | 方式 B: 共有 `core` 切り出し・`tint-server`・`createHttpBackend()` | 一部完了 |
 | 1.5 | 方式 B: Tauri からのサーバー自動起動とライフサイクル管理 | 完了 |
 | 2 | 方式 B: ブラウザ用 `TintHost` と Web ビルド手順を追加 | 完了 |
-| 3 | 方式 C: Cerune の lib API 状況を調査し、WASM ラッパを試作 | 未着手 |
+| 3 | 方式 C: Cerune の lib API 状況を調査し、WASM ラッパを試作 | 完了 |
 | 4 | 方式 C: `createWasmBackend()` と機能制限の検証 | 未着手 |
 | 5 | 3 バックエンドの統合テストとドキュメント整備 | 未着手 |
 
@@ -244,8 +258,13 @@ Tauri 版は全フィールドが `true` のため、現行 UI は変化しま�
     判定（`src/environment.ts`）。File System Access API が使えない場合は
     ファイル選択とダウンロードにフォールバック。CORS は loopback
     オリジンのみ許可。
+  - フェーズ 3: WASM 実現性の調査と試作（`experiments/wasm`）。
+    `cerune-lang` の公開 API を `wasm-bindgen` で包み、
+    `wasm32-unknown-unknown` へビルドできることを確認。Node 上で
+    `check` / `emit_ir` / `emit_wat` / `execute(vm)` の動作を検証済み。
 - 未実装:
-  - 方式 C（ブラウザ WASM）。Cerune のライブラリ API が前提。
+  - フェーズ 4（`createWasmBackend()` とその機能制限の検証）。
+  - 方式 C の実配布（WASM をフロントエンドのビルドに組み込む）。
 
 ### 自動起動方式の補足
 

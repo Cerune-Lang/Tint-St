@@ -15,6 +15,12 @@ dist-ssr
 # Rust build artifacts (Cargo workspace)
 /target/
 
+# Experimental WASM prototype build outputs (see docs/playground-architecture.md)
+/experiments/*/target/
+/experiments/*/pkg/
+/experiments/*/pkg-node/
+/experiments/*/Cargo.lock
+
 # Editor directories and files
 .vscode/
 .idea
