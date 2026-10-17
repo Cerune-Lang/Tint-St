@@ -3,6 +3,7 @@ mod interface;
 
 use interface::{
     ExecuteRequest, ExecutionPath, ExecutionResult, Observation, ObserveRequest, Target,
+    parse_heap_limit,
 };
 
 #[tauri::command]
@@ -46,13 +47,19 @@ fn emit_all(
     source: String,
     target: String,
     annotate_origins: bool,
+    native_ssa: bool,
     source_path: Option<String>,
+    string_heap_limit: Option<String>,
+    array_heap_limit: Option<String>,
 ) -> Result<Observation, String> {
     let request = ObserveRequest {
         source,
         source_path,
         target: Target::parse(&target)?,
         annotate_origins,
+        native_ssa,
+        string_heap_limit: parse_heap_limit(string_heap_limit, "--string-heap-limit")?,
+        array_heap_limit: parse_heap_limit(array_heap_limit, "--array-heap-limit")?,
     };
 
     cerune_cli::observe(request)
@@ -63,11 +70,15 @@ fn execute(
     source: String,
     source_path: Option<String>,
     path: String,
+    string_heap_limit: Option<String>,
+    array_heap_limit: Option<String>,
 ) -> Result<ExecutionResult, String> {
     let request = ExecuteRequest {
         source,
         source_path,
         path: ExecutionPath::parse(&path)?,
+        string_heap_limit: parse_heap_limit(string_heap_limit, "--string-heap-limit")?,
+        array_heap_limit: parse_heap_limit(array_heap_limit, "--array-heap-limit")?,
     };
 
     cerune_cli::execute(request)

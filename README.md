@@ -35,6 +35,7 @@ Cerune source
      │    ├─ WASM
      │    │    └─ WAT
      │    ├─ Native
+     │    │    ├─ LIR
      │    │    ├─ ASM
      │    │    └─ Object
      │    └─ VM
@@ -62,11 +63,14 @@ Cerune source
 - WebAssembly Text (`.wat`) を生成
 - QBE IR を生成
 - x86-64 Assembly を直接生成
+- Native LIR を表示
+- Native LIR / ASM / Object を SSA 経由で生成
 - Cerune Bytecode を生成
 - Clang を経由して C ASM を観察
 - Clang を経由して LLVM ASM を観察
 - QBE を経由して QBE ASM を観察
 - Windows x64 / Linux x86-64 のターゲットを切り替え
+- 文字列 / 配列ヒープの上限を指定
 - Origins / Provenance の注釈を表示
 - COFF / ELF Object を生成
 - Object の Sections / Symbols / Relocations を観察
@@ -284,10 +288,15 @@ Tint*
  ├─ cerune emit-llvm
  ├─ cerune emit-wat
  ├─ cerune emit-qbe
+ ├─ cerune emit-lir
  ├─ cerune emit-asm
  ├─ cerune emit-obj
  └─ cerune emit-bytecode
 ```
+
+`Native SSA` を有効にすると、Native LIR / ASM / Object は SSA を経由して生成されます。
+
+`str heap` / `arr heap` にバイト数を入力すると、`--string-heap-limit` / `--array-heap-limit` として各 Cerune 呼び出しへ渡されます。空欄の場合は Cerune の既定値を使います。
 
 いくつかの表示は Cerune が直接生成します。
 
@@ -300,6 +309,7 @@ Cerune → C
 Cerune → LLVM IR
 Cerune → WAT
 Cerune → QBE IR
+Cerune → Native LIR
 Cerune → Direct ASM
 Cerune → Object
 Cerune → Bytecode

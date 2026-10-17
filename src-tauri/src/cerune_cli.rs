@@ -21,6 +21,10 @@ pub fn observe(request: ObserveRequest) -> Result<Observation, String> {
 
     let annotate_origins = request.annotate_origins;
 
+    let native_ssa = request.native_ssa;
+
+    let heap = heap_arguments(request.string_heap_limit, request.array_heap_limit);
+
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -48,50 +52,62 @@ pub fn observe(request: ObserveRequest) -> Result<Observation, String> {
 
         let sources = run_cerune("emit-sources", &source_path, &[])?;
 
-        let ir = run_cerune("emit-ir", &source_path, &[])?;
+        let ir = run_cerune_with_heap("emit-ir", &source_path, &[], &heap)?;
 
-        let mir = run_cerune("emit-mir", &source_path, &[])?;
+        let mir = run_cerune_with_heap("emit-mir", &source_path, &[], &heap)?;
 
-        let ssa = run_cerune("emit-mir", &source_path, &["--ssa"])?;
+        let ssa = run_cerune_with_heap("emit-mir", &source_path, &["--ssa"], &heap)?;
 
-        let c = run_cerune("emit-c", &source_path, &[])?;
+        let c = run_cerune_with_heap("emit-c", &source_path, &[], &heap)?;
 
         let c_asm = run_clang_asm(&c, "c", "c", timestamp, target_name)
             .unwrap_or_else(|error| format!("C ASM unavailable:\n{error}"));
 
         let llvm = if annotate_origins {
-            run_cerune(
+            run_cerune_with_heap(
                 "emit-llvm",
                 &source_path,
                 &["--target", target_name, "--annotate-origins"],
+                &heap,
             )?
         } else {
-            run_cerune("emit-llvm", &source_path, &["--target", target_name])?
+            run_cerune_with_heap("emit-llvm", &source_path, &["--target", target_name], &heap)?
         };
 
         let llvm_asm = run_clang_asm(&llvm, "ll", "llvm", timestamp, target_name)
             .unwrap_or_else(|error| format!("LLVM ASM unavailable:\n{error}"));
 
-        let wat = run_cerune("emit-wat", &source_path, &[])?;
+        let wat = run_cerune_with_heap("emit-wat", &source_path, &[], &heap)?;
 
-        let qbe = run_cerune("emit-qbe", &source_path, &["--target", target_name])?;
+        let qbe = run_cerune_with_heap("emit-qbe", &source_path, &["--target", target_name], &heap)?;
 
         let qbe_asm = run_qbe_asm(&qbe, timestamp, target)
             .unwrap_or_else(|error| format!("QBE ASM unavailable:\n{error}"));
 
-        let direct_asm = if annotate_origins {
-            run_cerune(
-                "emit-asm",
-                &source_path,
-                &["--target", target_name, "--annotate-origins"],
-            )?
-        } else {
-            run_cerune("emit-asm", &source_path, &["--target", target_name])?
-        };
+        let mut lir_args = vec!["--target", target_name];
 
-        let object = run_cerune_object(&source_path, target, annotate_origins, timestamp)?;
+        if native_ssa {
+            lir_args.push("--ssa");
+        }
 
-        let bytecode = run_cerune("emit-bytecode", &source_path, &[])?;
+        let lir = run_cerune_with_heap("emit-lir", &source_path, &lir_args, &heap)?;
+
+        let mut asm_args = vec!["--target", target_name];
+
+        if native_ssa {
+            asm_args.push("--ssa");
+        }
+
+        if annotate_origins {
+            asm_args.push("--annotate-origins");
+        }
+
+        let direct_asm = run_cerune_with_heap("emit-asm", &source_path, &asm_args, &heap)?;
+
+        let object =
+            run_cerune_object(&source_path, target, annotate_origins, native_ssa, timestamp, &heap)?;
+
+        let bytecode = run_cerune_with_heap("emit-bytecode", &source_path, &[], &heap)?;
 
         Ok(Observation {
             sources,
@@ -110,6 +126,8 @@ pub fn observe(request: ObserveRequest) -> Result<Observation, String> {
             qbe,
             qbe_asm,
 
+            lir,
+
             direct_asm,
             object,
 
@@ -123,6 +141,8 @@ pub fn observe(request: ObserveRequest) -> Result<Observation, String> {
 }
 
 pub fn execute(request: ExecuteRequest) -> Result<ExecutionResult, String> {
+    let heap = heap_arguments(request.string_heap_limit, request.array_heap_limit);
+
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -149,13 +169,15 @@ pub fn execute(request: ExecuteRequest) -> Result<ExecutionResult, String> {
         run_cerune("check", &source_path, &[])?;
 
         let output = match request.path {
-            ExecutionPath::Ir => run_cerune("run", &source_path, &[])?,
+            ExecutionPath::Ir => run_cerune_with_heap("run", &source_path, &[], &heap)?,
 
-            ExecutionPath::Mir => run_cerune("run-mir", &source_path, &[])?,
+            ExecutionPath::Mir => run_cerune_with_heap("run-mir", &source_path, &[], &heap)?,
 
-            ExecutionPath::Ssa => run_cerune("run-mir", &source_path, &["--ssa"])?,
+            ExecutionPath::Ssa => {
+                run_cerune_with_heap("run-mir", &source_path, &["--ssa"], &heap)?
+            }
 
-            ExecutionPath::Vm => run_cerune("run-vm", &source_path, &[])?,
+            ExecutionPath::Vm => run_cerune_with_heap("run-vm", &source_path, &[], &heap)?,
         };
 
         Ok(ExecutionResult { output })
@@ -199,11 +221,42 @@ fn run_cerune(command: &str, source_path: &Path, args: &[&str]) -> Result<String
         .map_err(|error| format!("Cerune returned invalid UTF-8: {error}"))
 }
 
+fn heap_arguments(string: Option<u64>, array: Option<u64>) -> Vec<String> {
+    let mut args = Vec::new();
+
+    if let Some(value) = string {
+        args.push("--string-heap-limit".to_owned());
+        args.push(value.to_string());
+    }
+
+    if let Some(value) = array {
+        args.push("--array-heap-limit".to_owned());
+        args.push(value.to_string());
+    }
+
+    args
+}
+
+fn run_cerune_with_heap(
+    command: &str,
+    source_path: &Path,
+    args: &[&str],
+    heap: &[String],
+) -> Result<String, String> {
+    let mut merged: Vec<&str> = args.to_vec();
+
+    merged.extend(heap.iter().map(String::as_str));
+
+    run_cerune(command, source_path, &merged)
+}
+
 fn run_cerune_object(
     source_path: &Path,
     target: Target,
     annotate_origins: bool,
+    native_ssa: bool,
     timestamp: u128,
+    heap: &[String],
 ) -> Result<String, String> {
     let extension = target.object_extension();
 
@@ -222,6 +275,12 @@ fn run_cerune_object(
         if annotate_origins {
             command.arg("--annotate-origins");
         }
+
+        if native_ssa {
+            command.arg("--ssa");
+        }
+
+        command.args(heap);
 
         let output = command
             .arg("-o")

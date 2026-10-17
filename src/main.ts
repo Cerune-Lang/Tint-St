@@ -53,6 +53,7 @@ type OutputKind =
   | "wat"
   | "qbe"
   | "qbeAsm"
+  | "lir"
   | "directAsm"
   | "object"
   | "bytecode"
@@ -77,6 +78,8 @@ interface ObservationResult {
 
   qbe: string;
   qbeAsm: string;
+
+  lir: string;
 
   directAsm: string;
   object: string;
@@ -103,6 +106,8 @@ const outputs: Record<
 
   qbe: "",
   qbeAsm: "",
+
+  lir: "",
 
   directAsm: "",
   object: "",
@@ -337,6 +342,11 @@ function showGroup(
       ".backend-groups",
     );
 
+  if (backendGroups) {
+    backendGroups.hidden =
+      group !== "backends";
+  }
+
   document
     .querySelectorAll<HTMLButtonElement>(
       ".group-tab",
@@ -397,6 +407,32 @@ function annotateOrigins(): boolean {
   }
 
   return element.checked;
+}
+
+function nativeSsa(): boolean {
+  const element =
+    document.querySelector<HTMLInputElement>(
+      "#native-ssa-toggle",
+    );
+
+  return element?.checked ?? false;
+}
+
+function heapLimit(
+  selector: string,
+): string | null {
+  const element =
+    document.querySelector<HTMLInputElement>(
+      selector,
+    );
+
+  if (!element) {
+    return null;
+  }
+
+  const value = element.value.trim();
+
+  return value.length > 0 ? value : null;
 }
 
 async function openFile() {
@@ -506,6 +542,12 @@ async function runExecution() {
           source: sourceText(),
           sourcePath: currentPath,
           path,
+          stringHeapLimit: heapLimit(
+            "#string-heap-limit",
+          ),
+          arrayHeapLimit: heapLimit(
+            "#array-heap-limit",
+          ),
         },
       );
 
@@ -553,7 +595,14 @@ async function emit() {
           source: sourceText(),
           target: selectedTarget(),
           annotateOrigins: annotateOrigins(),
+          nativeSsa: nativeSsa(),
           sourcePath: currentPath,
+          stringHeapLimit: heapLimit(
+            "#string-heap-limit",
+          ),
+          arrayHeapLimit: heapLimit(
+            "#array-heap-limit",
+          ),
         },
       );
 

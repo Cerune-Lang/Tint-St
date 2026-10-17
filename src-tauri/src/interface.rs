@@ -45,6 +45,39 @@ pub struct ObserveRequest {
     pub source_path: Option<String>,
     pub target: Target,
     pub annotate_origins: bool,
+    pub native_ssa: bool,
+    pub string_heap_limit: Option<u64>,
+    pub array_heap_limit: Option<u64>,
+}
+
+pub fn parse_heap_limit(value: Option<String>, flag: &str) -> Result<Option<u64>, String> {
+    let Some(text) = value else {
+        return Ok(None);
+    };
+
+    let text = text.trim();
+
+    if text.is_empty() {
+        return Ok(None);
+    }
+
+    if !text.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(format!(
+            "{flag} expects a decimal byte count from 0 to 9223372036854775807"
+        ));
+    }
+
+    let parsed: u64 = text
+        .parse()
+        .map_err(|_| format!("{flag} expects a decimal byte count from 0 to 9223372036854775807"))?;
+
+    if parsed > i64::MAX as u64 {
+        return Err(format!(
+            "{flag} expects a decimal byte count from 0 to 9223372036854775807"
+        ));
+    }
+
+    Ok(Some(parsed))
 }
 
 #[derive(Serialize)]
@@ -65,6 +98,8 @@ pub struct Observation {
 
     pub qbe: String,
     pub qbe_asm: String,
+
+    pub lir: String,
 
     pub direct_asm: String,
     pub object: String,
@@ -97,6 +132,8 @@ pub struct ExecuteRequest {
     pub source: String,
     pub source_path: Option<String>,
     pub path: ExecutionPath,
+    pub string_heap_limit: Option<u64>,
+    pub array_heap_limit: Option<u64>,
 }
 
 #[derive(Serialize)]

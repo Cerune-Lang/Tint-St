@@ -91,12 +91,49 @@
                 </option>
               </select>
 
+              <label
+                class="heap-option"
+                title="--string-heap-limit (bytes)"
+              >
+                <input
+                  id="string-heap-limit"
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="str heap"
+                />
+              </label>
+
+              <label
+                class="heap-option"
+                title="--array-heap-limit (bytes)"
+              >
+                <input
+                  id="array-heap-limit"
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="arr heap"
+                />
+              </label>
+
               <label class="origins-option">
                 <input
                   id="origins-toggle"
                   type="checkbox"
                 />
                 Origins
+              </label>
+
+              <label
+                class="origins-option"
+                title="Use SSA for native LIR / ASM / Object"
+              >
+                <input
+                  id="native-ssa-toggle"
+                  type="checkbox"
+                />
+                Native SSA
               </label>
 
               <button
@@ -305,6 +342,16 @@
             </button>
 
             <!-- Backends: Native -->
+            <button
+              class="tab"
+              data-group="backends"
+              data-backend="native"
+              data-output="lir"
+              type="button"
+            >
+              LIR
+            </button>
+
             <button
               class="tab"
               data-group="backends"
