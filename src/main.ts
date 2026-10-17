@@ -446,6 +446,152 @@ function heapLimit(
   return value.length > 0 ? value : null;
 }
 
+const settingsKey = "tint.settings";
+
+interface Settings {
+  target: Target;
+  origins: boolean;
+  nativeSsa: boolean;
+  stringHeapLimit: string;
+  arrayHeapLimit: string;
+}
+
+function readSettings(): Partial<Settings> {
+  try {
+    const raw =
+      localStorage.getItem(settingsKey);
+
+    if (!raw) {
+      return {};
+    }
+
+    const parsed: unknown =
+      JSON.parse(raw);
+
+    if (
+      typeof parsed === "object" &&
+      parsed !== null
+    ) {
+      return parsed as Partial<Settings>;
+    }
+
+    return {};
+  } catch {
+    return {};
+  }
+}
+
+function currentSettings(): Settings {
+  return {
+    target: selectedTarget(),
+    origins: annotateOrigins(),
+    nativeSsa: nativeSsa(),
+    stringHeapLimit:
+      heapLimit("#string-heap-limit") ?? "",
+    arrayHeapLimit:
+      heapLimit("#array-heap-limit") ?? "",
+  };
+}
+
+function saveSettings() {
+  try {
+    localStorage.setItem(
+      settingsKey,
+      JSON.stringify(currentSettings()),
+    );
+  } catch {
+    // 設定の保存に失敗しても観測は継続します。
+  }
+}
+
+function applySettings(
+  settings: Partial<Settings>,
+) {
+  if (settings.target) {
+    const select =
+      document.querySelector<HTMLSelectElement>(
+        "#target-select",
+      );
+
+    if (select) {
+      select.value = settings.target;
+    }
+  }
+
+  if (typeof settings.origins === "boolean") {
+    const toggle =
+      document.querySelector<HTMLInputElement>(
+        "#origins-toggle",
+      );
+
+    if (toggle) {
+      toggle.checked = settings.origins;
+    }
+  }
+
+  if (typeof settings.nativeSsa === "boolean") {
+    const toggle =
+      document.querySelector<HTMLInputElement>(
+        "#native-ssa-toggle",
+      );
+
+    if (toggle) {
+      toggle.checked = settings.nativeSsa;
+    }
+  }
+
+  if (typeof settings.stringHeapLimit === "string") {
+    const input =
+      document.querySelector<HTMLInputElement>(
+        "#string-heap-limit",
+      );
+
+    if (input) {
+      input.value = settings.stringHeapLimit;
+    }
+  }
+
+  if (typeof settings.arrayHeapLimit === "string") {
+    const input =
+      document.querySelector<HTMLInputElement>(
+        "#array-heap-limit",
+      );
+
+    if (input) {
+      input.value = settings.arrayHeapLimit;
+    }
+  }
+}
+
+function bindSettingsPersistence() {
+  const selectors = [
+    "#target-select",
+    "#origins-toggle",
+    "#native-ssa-toggle",
+    "#string-heap-limit",
+    "#array-heap-limit",
+  ];
+
+  selectors.forEach((selector) => {
+    const element =
+      document.querySelector(selector);
+
+    if (!element) {
+      return;
+    }
+
+    element.addEventListener(
+      "change",
+      saveSettings,
+    );
+
+    element.addEventListener(
+      "input",
+      saveSettings,
+    );
+  });
+}
+
 async function openFile() {
   const path = await open({
     multiple: false,
@@ -970,5 +1116,9 @@ showGroup("pipeline");
           void renameCurrentFile();
         },
       );
+
+    applySettings(readSettings());
+
+    bindSettingsPersistence();
   },
 );

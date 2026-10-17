@@ -78,6 +78,7 @@ Cerune source
 - Windows x64 / Linux x86-64 のターゲットを切り替え
 - 文字列 / 配列ヒープの上限を指定
 - Origins / Provenance の注釈を表示
+- ターゲット / Origins / Native SSA / ヒープ上限の選択を保存
 - COFF / ELF Object を生成
 - Object の Sections / Symbols / Relocations を観察
 - Object に残った Origin Symbols を NodeId ごとに観察
