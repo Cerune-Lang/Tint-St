@@ -204,15 +204,27 @@
 | フィールド | UI 上の対応 |
 | --- | --- |
 | `check` | 診断（linter） |
-| `observe` | Emit ボタン / Pipeline グループ |
+| `observe` | Emit ボタン / Pipeline・Backends グループ |
 | `execute` | Execution グループ |
 | `compare` | Compare グループ |
 | `modules` | Modules グループ |
 | `snapshots` | スナップショット操作 |
 | `rename` | ファイル名変更 |
+| `outputs?` | 提供する出力（タブ）。未指定は全対応 |
+| `executionPaths?` | 提供する実行経路（IR / MIR / SSA / VM）。未指定は全対応 |
+| `native?` | target / Origins / Native SSA 設定。未指定は `true` |
+| `heapLimits?` | ヒープ上限設定。未指定は `true` |
 
-UI は `applyCapabilities()` で、**提供できない機能だけを無効化**します。
-Tauri 版は全フィールドが `true` のため、現行 UI は変化しません。
+UI は `applyCapabilities()`（`src/main.ts`）で **提供できない機能だけを無効化**します。
+判定ロジックは `src/capabilities.ts` の純関数（`outputAvailable()` /
+`backendAvailable()` / `unavailableReason()`）に切り出し、`test/capabilities.test.ts`
+で回帰テストしています。Tauri 版（全フィールド `true` かつ任意フィールド未指定）と
+ローカル HTTP 版は、出力・経路・設定がすべて有効のまま変化しません。
+
+非対応の出力タブ・グループタブ・バックエンドタブは `disabled` ではなく
+`.unavailable`（`aria-disabled`）にし、押すと理由と代替手段（Desktop 版 /
+ローカル HTTP 版）を出力欄に表示します。ネイティブ依存の設定は実際に
+`disabled` にし、`title` で理由を示します（既存の `title` は保持）。
 
 ## 6. 機能マトリクス
 
@@ -228,6 +240,11 @@ Tauri 版は全フィールドが `true` のため、現行 UI は変化しま�
 | ファイル入出力 | ○ (ネイティブ) | ○ (ブラウザ API) | ○ (ブラウザ API) |
 
 凡例: ○=提供可 / △=条件付き / ×=提供不可。
+
+WASM 版の `capabilities()` は `outputs` に
+`sources` / `ir` / `bytecode` / `wat` / `irOutput` / `mirOutput` / `vmOutput` を、
+`executionPaths` に `ir` / `mir` / `vm` を列挙し、`native` / `heapLimits` を
+`false` にします。SSA 実行は `executionPaths` に含まれないため選択できません。
 
 ## 7. 制約事項
 

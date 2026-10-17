@@ -4,6 +4,7 @@ import type {
   ExecutionResult,
   ModuleFile,
   ObservationResult,
+  OutputKind,
   Snapshot,
   SnapshotMeta,
   Target,
@@ -21,6 +22,25 @@ export interface BackendCapabilities {
   modules: boolean;
   snapshots: boolean;
   rename: boolean;
+
+  /**
+   * 対応している出力種別。未指定の場合はすべて対応とみなします。
+   * ネイティブツールチェーンに依存する出力（LLVM / QBE / LIR / Object など）
+   * を区別するために使います。
+   */
+  outputs?: OutputKind[];
+
+  /** 対応している実行経路。未指定の場合はすべて対応とみなします。 */
+  executionPaths?: ExecutionPath[];
+
+  /**
+   * ネイティブツールチェーン依存の設定（target / origins / native SSA）が
+   * 使えるか。未指定は `true` とみなします。
+   */
+  native?: boolean;
+
+  /** ヒープ上限（string / array）設定が効くか。未指定は `true` とみなします。 */
+  heapLimits?: boolean;
 }
 
 export interface ObserveArgs {

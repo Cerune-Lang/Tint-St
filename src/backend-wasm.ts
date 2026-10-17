@@ -6,9 +6,46 @@ import type {
 
 import type {
   Diagnostic,
+  ExecutionPath,
   ExecutionResult,
   ObservationResult,
+  OutputKind,
 } from "./types";
+
+/** WASM 版が提供する出力（`capabilities()` が省略した場合の既定値）。 */
+export const WASM_OUTPUTS: OutputKind[] = [
+  "sources",
+  "ir",
+  "bytecode",
+  "wat",
+  "irOutput",
+  "mirOutput",
+  "vmOutput",
+];
+
+/** WASM 版が提供する実行経路（`capabilities()` が省略した場合の既定値）。 */
+export const WASM_EXECUTION_PATHS: ExecutionPath[] = [
+  "ir",
+  "mir",
+  "vm",
+];
+
+function normalizeCapabilities(
+  raw: BackendCapabilities,
+): BackendCapabilities {
+  return {
+    ...raw,
+
+    outputs: raw.outputs ?? WASM_OUTPUTS,
+
+    executionPaths:
+      raw.executionPaths ?? WASM_EXECUTION_PATHS,
+
+    native: raw.native ?? false,
+
+    heapLimits: raw.heapLimits ?? false,
+  };
+}
 
 /**
  * `experiments/wasm`（`wasm-bindgen`）が公開する関数群です。
@@ -77,9 +114,11 @@ export function createWasmBackend(
 ): TintBackend {
   return {
     capabilities: async () =>
-      JSON.parse(
-        module.capabilities(),
-      ) as BackendCapabilities,
+      normalizeCapabilities(
+        JSON.parse(
+          module.capabilities(),
+        ) as BackendCapabilities,
+      ),
 
     check: async (source) =>
       JSON.parse(module.check(source)) as Diagnostic[],
