@@ -25,17 +25,17 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout Tint
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: Tint
 
       # Tint と兄弟になるよう Cerune をチェックアウトします。WASM クレートは
       # `../../../Cerune` の path 依存のため、この配置が必要です。
       - name: Checkout Cerune (pinned)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: Cerune-Lang/Cerune
           ref: ${{ env.CERUNE_REF }}
@@ -53,7 +53,7 @@ jobs:
           tool: wasm-pack@${{ env.WASM_PACK_VERSION }}
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -70,20 +70,20 @@ jobs:
         run: npm run build:pages
 
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: Tint/dist
 
   deploy:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
