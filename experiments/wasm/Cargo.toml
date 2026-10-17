@@ -3,6 +3,7 @@ name = "tint-wasm"
 version = "0.0.0"
 edition = "2021"
 publish = false
+license = "MIT OR Apache-2.0"
 description = "Experimental WebAssembly wrapper around the Cerune compiler for the browser Playground"
 
 # This crate is intentionally excluded from the Tint Cargo workspace. It only

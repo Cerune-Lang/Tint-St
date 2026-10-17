@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Local HTTP server exposing the Tint/Cerune observation API for the browser Playground"
 authors = ["you"]
 edition = "2021"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 tint-core = { path = "../core" }
