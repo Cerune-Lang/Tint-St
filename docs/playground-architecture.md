@@ -129,12 +129,19 @@
     `wasm-opt` 後に約 1.1 MB の `.wasm` が生成される。
   - 検証: Node 上で `check` / `emit_ir` / `emit_wat` / `execute("vm")` が
     動作することを確認済み。
-- 本実装に必要な作業:
-  - フロントエンドに `createWasmBackend()` を追加し、WASM 版の実行経路に
-    接続する。
+- 実装状況（フェーズ 4）:
+  - `src/backend-wasm.ts` に `createWasmBackend(module)` を実装した。
+    WASM モジュールは注入する形にし、`wasm-bindgen` のビルド成果物に
+    依存しない。`check` / `observe` / `execute` を写像し、それ以外の
+    機能は `capabilities()` に従って例外を返す。
+  - `test/backend-wasm.test.ts` で偽モジュールを使い、機能制限を含めて
+    検証済み。
+- 残作業:
+  - 実際の `.wasm` をフロントエンドのビルドに組み込む（成果物を同梱する
+    かビルド時に生成するかは未決定）。
   - import 付きソースを扱う場合は `modules` の解決を WASM 側で行う設計が
     必要（現状は対象外）。
-  - `wasm-bindgen` のグルーコードを Vite ビルドに組み込む。
+  - `wasm-bindgen` のグルーコードを Vite ビルドに接続する。
 - 長所: サーバー不要。完全にブラウザ内で完結。
 - 短所: 提供できる機能が限定的。ビルド工程が増える。WASM の配布サイズ
   （現状約 1.1 MB）を許容する必要がある。
@@ -234,7 +241,7 @@ Tauri 版は全フィールドが `true` のため、現行 UI は変化しま�
 | 1.5 | 方式 B: Tauri からのサーバー自動起動とライフサイクル管理 | 完了 |
 | 2 | 方式 B: ブラウザ用 `TintHost` と Web ビルド手順を追加 | 完了 |
 | 3 | 方式 C: Cerune の lib API 状況を調査し、WASM ラッパを試作 | 完了 |
-| 4 | 方式 C: `createWasmBackend()` と機能制限の検証 | 未着手 |
+| 4 | 方式 C: `createWasmBackend()` と機能制限の検証 | 完了 |
 | 5 | 3 バックエンドの統合テストとドキュメント整備 | 未着手 |
 
 各フェーズは独立して段階的に進められるよう設計しています。フェーズ 1
@@ -262,9 +269,12 @@ Tauri 版は全フィールドが `true` のため、現行 UI は変化しま�
     `cerune-lang` の公開 API を `wasm-bindgen` で包み、
     `wasm32-unknown-unknown` へビルドできることを確認。Node 上で
     `check` / `emit_ir` / `emit_wat` / `execute(vm)` の動作を検証済み。
+  - フェーズ 4: 方式 C のアダプタ `createWasmBackend()` を実装
+    （`src/backend-wasm.ts`）。WASM モジュールを注入して使う設計にし、
+    機能制限を偽モジュールで検証。
 - 未実装:
-  - フェーズ 4（`createWasmBackend()` とその機能制限の検証）。
-  - 方式 C の実配布（WASM をフロントエンドのビルドに組み込む）。
+  - 方式 C の実配布（WASM をフロントエンドのビルドに組み込む。成果物の
+    同梱方法は未決定）。
 
 ### 自動起動方式の補足
 

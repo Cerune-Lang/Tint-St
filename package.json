@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "tsc -p tsconfig.test.json && node --import tsx --test test/origins.test.ts test/imports.test.ts test/diagnostics.test.ts test/settings.test.ts test/environment.test.ts",
+    "test": "tsc -p tsconfig.test.json && node --import tsx --test test/origins.test.ts test/imports.test.ts test/diagnostics.test.ts test/settings.test.ts test/environment.test.ts test/backend-wasm.test.ts",
     "tauri": "tauri"
   },
   "dependencies": {
